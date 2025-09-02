@@ -1,24 +1,54 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { StyleSheet, Text, View } from "react-native";
+import { useRouter } from "expo-router";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+
+const members = [
+  { name: "Akila", path: "/akila/dashboard", colors: ["#4f46e5", "#6366f1"] },
+  {
+    name: "Binoosh",
+    path: "/binoosh/dashboard",
+    colors: ["#ec4899", "#f472b6"],
+  },
+  {
+    name: "Shalinda",
+    path: "/shalinda/dashboard",
+    colors: ["#f59e0b", "#fbbf24"],
+  },
+];
 
 export default function HomePage() {
+  const router = useRouter();
+
   return (
     <View style={styles.container}>
       <Text style={styles.heading}>Dashboard</Text>
 
       <View style={styles.row}>
-        <LinearGradient colors={["#4f46e5", "#6366f1"]} style={styles.card}>
-          <Text style={styles.cardText}>Akila</Text>
-        </LinearGradient>
-        <LinearGradient colors={["#ec4899", "#f472b6"]} style={styles.card}>
-          <Text style={styles.cardText}>Binoosh</Text>
-        </LinearGradient>
+        {members.slice(0, 2).map((member) => (
+          <TouchableOpacity
+            key={member.name}
+            style={{ flex: 0.48 }}
+            onPress={() => router.push({ pathname: member.path } as any)}
+          >
+            <LinearGradient colors={member.colors as any} style={styles.card}>
+              <Text style={styles.cardText}>{member.name}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        ))}
       </View>
 
       <View style={styles.row}>
-        <LinearGradient colors={["#f59e0b", "#fbbf24"]} style={styles.card}>
-          <Text style={styles.cardText}>Shalinda</Text>
-        </LinearGradient>
+        {members.slice(2, 4).map((member) => (
+          <TouchableOpacity
+            key={member.name}
+            style={{ flex: 0.48 }}
+            onPress={() => router.push({ pathname: member.path } as any)}
+          >
+            <LinearGradient colors={member.colors as any} style={styles.card}>
+              <Text style={styles.cardText}>{member.name}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        ))}
       </View>
     </View>
   );
@@ -44,7 +74,6 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   card: {
-    flex: 0.48,
     height: 120,
     borderRadius: 15,
     justifyContent: "center",
@@ -55,9 +84,5 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 5,
   },
-  cardText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
+  cardText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
 });
