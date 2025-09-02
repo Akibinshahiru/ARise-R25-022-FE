@@ -21,7 +21,7 @@ export default function HomePage() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>Dashboard</Text>
+      <Text style={styles.heading}>ARISE Homepage</Text>
 
       <View style={styles.row}>
         {members.slice(0, 2).map((member) => (
