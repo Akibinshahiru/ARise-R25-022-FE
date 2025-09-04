@@ -5,7 +5,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 const members = [
   { name: "Akila", path: "/akila/dashboard", colors: ["#4f46e5", "#6366f1"] },
   {
-    name: "Binoosh",
+    name: "Phonological Dyslexia",
     path: "/binoosh/dashboard",
     colors: ["#ec4899", "#f472b6"],
   },
