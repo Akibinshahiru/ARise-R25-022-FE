@@ -7,7 +7,10 @@ import {
   Text,
   TextInput,
   View,
+  TouchableOpacity,
+  Alert,
 } from "react-native";
+import { useRouter } from "expo-router";
 
 type WordItem = {
   id: string;
@@ -30,6 +33,7 @@ const DEFAULT_DATA: WordItem[] = [
 ];
 
 export default function SurfaceDyslexia({ title = "Surface Dyslexia", words, onSearch }: Props) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const data = words ?? DEFAULT_DATA;
 
@@ -77,7 +81,18 @@ export default function SurfaceDyslexia({ title = "Surface Dyslexia", words, onS
             </View>
           </View>
         )}
-        renderItem={({ item }) => <WordRow item={item} />}
+        renderItem={({ item }) => (
+          <WordRow
+            item={item}
+            onPress={() => {
+              if (item.word.toLowerCase() === "yacht") {
+                router.push({ pathname: "/akila/ar-story", params: { word: "yacht" } } as any);
+              } else {
+                Alert.alert("Coming soon", `Stories for \"${item.word}\" will be added soon.`);
+              }
+            }}
+          />
+        )}
       />
     </SafeAreaView>
   );
@@ -91,9 +106,9 @@ function Chip({ label }: { label: string }) {
   );
 }
 
-function WordRow({ item }: { item: WordItem }) {
+function WordRow({ item, onPress }: { item: WordItem; onPress?: () => void }) {
   return (
-    <View style={styles.rowCard}>
+    <TouchableOpacity style={styles.rowCard} activeOpacity={0.85} onPress={onPress}>
       <View style={styles.letterPill}>
         <Text style={styles.letter}>{item.letter}</Text>
       </View>
@@ -107,7 +122,7 @@ function WordRow({ item }: { item: WordItem }) {
           <Feather name={(item.icon as any) || "star"} size={22} color="#6b21a8" />
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
