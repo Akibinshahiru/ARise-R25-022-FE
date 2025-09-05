@@ -3,7 +3,7 @@ import { useRouter } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 const members = [
-  { name: "Akila", path: "/akila/dashboard", colors: ["#4f46e5", "#6366f1"] },
+  { name: "Surface Dyslexia", path: "/akila/dashboard", colors: ["#4f46e5", "#6366f1"] },
   {
     name: "Binoosh",
     path: "/binoosh/dashboard",
