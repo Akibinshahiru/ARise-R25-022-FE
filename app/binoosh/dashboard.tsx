@@ -6,7 +6,7 @@ export default function BinooshDashboard() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Binoosh’s Dashboard</Text>
+      <Text style={styles.header}>Phonological Dyslexia Dashboard</Text>
 
       {/* First row with 2 buttons */}
       <View style={styles.row}>
