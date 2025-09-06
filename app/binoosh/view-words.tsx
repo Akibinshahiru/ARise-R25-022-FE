@@ -47,7 +47,7 @@ export default function ViewWordsScreen() {
         count: number;
         message: string;
         words: Word[];
-      }>("http://192.168.43.137:5000/api/words");
+      }>("/api/words");
       setWords(res.data.words);
     } catch (err: any) {
       console.error("Error fetching words:", err.message);

@@ -66,7 +66,7 @@ export default function ViewWordScreen() {
 
   const fetchWords = async () => {
     try {
-      const response = await axios.get("http://192.168.43.137:5000/api/words/wc");
+      const response = await axios.get("/api/words/wc");
       setWords(response.data.words || []);
     } catch (error: any) {
       console.error(error.response?.data || error.message);
@@ -107,7 +107,7 @@ export default function ViewWordScreen() {
     try {
       setSaving(true);
       const response = await axios.put(
-        `http://192.168.43.137:5000/api/words/update/${wordData._id}`,
+        `/api/words/update/${wordData._id}`,
         {
           word,
           wordSegmented: segmented,
@@ -148,7 +148,7 @@ export default function ViewWordScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await axios.delete(`http://192.168.43.137:5000/api/words/delete/${wordData._id}`);
+              await axios.delete(`/api/words/delete/${wordData._id}`);
               Alert.alert("Success", "Word deleted successfully");
               router.back();
             } catch (error: any) {
