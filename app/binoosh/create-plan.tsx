@@ -52,7 +52,7 @@ export default function CreatePlanScreen() {
     try {
       setLoading(true);
       const res = await axios.get<{ words: Word[] }>(
-        "http://192.168.43.137:5000/api/words"
+        "/api/words"
       );
       setWords(res.data.words);
     } catch (err: any) {
@@ -134,7 +134,7 @@ export default function CreatePlanScreen() {
     };
 
     try {
-      await axios.post("http://192.168.43.137:5000/api/challenges", payload);
+      await axios.post("/api/challenges", payload);
       alert("Plan created successfully!");
       setTitle("");
       setSelectedWords([]);

@@ -29,7 +29,7 @@ export default function CreateWordScreen() {
 
   const fetchWords = async () => {
       try {
-        const response = await axios.get("http://192.168.43.137:5000/api/words/wc");
+        const response = await axios.get("/api/words/wc");
         setWords(response.data.words || []);
       } catch (error: any) {
         console.error(error.response?.data || error.message);
@@ -71,7 +71,7 @@ export default function CreateWordScreen() {
 
     try {
       const response = await axios.post(
-        "http://192.168.43.137:5000/api/words",
+        "/api/words",
         {
           word,
           wordSegmented: segmented,

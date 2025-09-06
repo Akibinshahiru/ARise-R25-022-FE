@@ -43,7 +43,7 @@ export default function ViewPlansScreen() {
         message: string;
         count: number;
         challenges: Challenge[];
-      }>("http://192.168.43.137:5000/api/challenges"); // 👈 adjust your backend route
+      }>("/api/challenges"); //
 
       setChallenges(res.data.challenges);
     } catch (err: any) {
