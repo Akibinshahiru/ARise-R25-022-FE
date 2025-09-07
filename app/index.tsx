@@ -14,6 +14,7 @@ const members = [
     path: "/shalinda/dashboard",
     colors: ["#f59e0b", "#fbbf24"],
   },
+  { name: "Hiruni", path: "/hiruni/dashboard", colors: ["#4f46e5", "#6366f1"] },
 ];
 
 export default function HomePage() {
