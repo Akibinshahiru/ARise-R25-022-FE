@@ -1,59 +1,55 @@
+import { UnauthenticatedSidebarLayout } from "@/components/it21801204";
+import HomeButton from "@/components/shared/HomeButton";
 import React, { useState } from "react";
 import {
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  View,
 } from "react-native";
 
 export default function RegisterScreen() {
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const handleRegister = () => {
     // TODO: Replace this with your actual register logic
-    console.log("Name:", name);
     console.log("Email:", email);
     console.log("Password:", password);
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Create Account ✨</Text>
-      <Text style={styles.subtitle}>Join us to continue</Text>
+    <UnauthenticatedSidebarLayout title="Register">
+      <View style={styles.container}>
+        <Text style={styles.title}>Create Account ✨</Text>
+        <Text style={styles.subtitle}>Join us to continue</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Full Name"
-        placeholderTextColor="#9ca3af"
-        value={name}
-        onChangeText={setName}
-      />
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
+          placeholderTextColor="#9ca3af"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          value={email}
+          onChangeText={setEmail}
+        />
 
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        placeholderTextColor="#9ca3af"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-      />
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          placeholderTextColor="#9ca3af"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
 
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        placeholderTextColor="#9ca3af"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
-
-      <TouchableOpacity style={styles.button} onPress={handleRegister}>
-        <Text style={styles.buttonText}>Register</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <TouchableOpacity style={styles.button} onPress={handleRegister}>
+          <Text style={styles.buttonText}>Register</Text>
+        </TouchableOpacity>
+        <HomeButton />
+      </View>
+    </UnauthenticatedSidebarLayout>
   );
 }
 

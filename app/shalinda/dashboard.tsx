@@ -1,19 +1,19 @@
+import { UnauthenticatedSidebarLayout } from "@/components/it21801204";
 import HomeButton from "@/components/shared/HomeButton";
-import { SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 export default function ShalindaDashboard() {
   return (
-    <SafeAreaView style={styles.safe}>
+    <UnauthenticatedSidebarLayout title="Welcome">
       <View style={styles.container}>
-        <Text style={styles.text}>Shalinda’s Dashboard</Text>
+        <Text style={styles.text}>Welcome to the Dashboard!</Text>
         <HomeButton />
       </View>
-    </SafeAreaView>
+    </UnauthenticatedSidebarLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#f3f4f6" },
   container: {
     flex: 1,
     justifyContent: "center",

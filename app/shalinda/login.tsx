@@ -1,3 +1,5 @@
+import { UnauthenticatedSidebarLayout } from "@/components/it21801204";
+import HomeButton from "@/components/shared/HomeButton";
 import React, { useState } from "react";
 import {
   StyleSheet,
@@ -18,31 +20,40 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Welcome Back 👋</Text>
-      <Text style={styles.subtitle}>Please login to continue</Text>
+    <UnauthenticatedSidebarLayout title="Login">
+      <View style={styles.container}>
+        <Text style={styles.title}>Welcome Back 👋</Text>
+        <Text style={styles.subtitle}>Please login to continue</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Username"
-        placeholderTextColor="#9ca3af"
-        value={email}
-        onChangeText={setEmail}
-      />
+        <TextInput
+          style={styles.input}
+          placeholder="Username"
+          placeholderTextColor="#9ca3af"
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
 
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        placeholderTextColor="#9ca3af"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          placeholderTextColor="#9ca3af"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
 
-      <TouchableOpacity style={styles.button} onPress={handleLogin}>
-        <Text style={styles.buttonText}>Login</Text>
-      </TouchableOpacity>
-    </View>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={handleLogin}
+          activeOpacity={0.9}
+        >
+          <Text style={styles.buttonText}>Login</Text>
+        </TouchableOpacity>
+        <HomeButton />
+      </View>
+    </UnauthenticatedSidebarLayout>
   );
 }
 
