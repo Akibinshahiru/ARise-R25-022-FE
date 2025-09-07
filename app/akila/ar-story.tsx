@@ -1,10 +1,10 @@
 import React from "react";
 import { useLocalSearchParams } from "expo-router";
-import ARWordStory from "../../components/IT21832826/screens/story_generation/ARWordStory";
+import EpisodeStoryPlayer from "../../components/IT21832826/screens/story_generation/EpisodeStoryPlayer";
 
 export default function ARStoryRoute() {
   const params = useLocalSearchParams<{ word?: string }>();
   const word = (params.word as string) || "yacht";
-  return <ARWordStory word={word} />;
+  return <EpisodeStoryPlayer word={word} />;
 }
 

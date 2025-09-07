@@ -21,6 +21,10 @@ export default function ARWordStory({ word = "yacht", storyText = DEFAULT_STORY 
         mediaPlaybackRequiresUserAction={false}
         domStorageEnabled
         allowFileAccess
+        // Android: grant camera/mic when the page requests it
+        onPermissionRequest={(e: any) => {
+          try { e.grant(e.resources); } catch {}
+        }}
         style={{ backgroundColor: "black" }}
         source={{ html }}
       />
