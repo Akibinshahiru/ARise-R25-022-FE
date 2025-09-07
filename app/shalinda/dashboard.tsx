@@ -1,14 +1,19 @@
-import { StyleSheet, Text, View } from "react-native";
+import HomeButton from "@/components/shared/HomeButton";
+import { SafeAreaView, StyleSheet, Text, View } from "react-native";
 
-export default function AkilaDashboard() {
+export default function ShalindaDashboard() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.text}>Akila’s Dashboard</Text>
-    </View>
+    <SafeAreaView style={styles.safe}>
+      <View style={styles.container}>
+        <Text style={styles.text}>Shalinda’s Dashboard</Text>
+        <HomeButton />
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: "#f3f4f6" },
   container: {
     flex: 1,
     justifyContent: "center",
