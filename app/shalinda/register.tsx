@@ -1,99 +1,79 @@
-import { UnauthenticatedSidebarLayout } from "@/components/it21801204";
-import HomeButton from "@/components/shared/HomeButton";
-import React, { useState } from "react";
-import {
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { register, type Role } from "@/store/IT21801204/authSlice";
+import { Link, router } from "expo-router";
+import { useEffect, useState } from "react";
+import { Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useDispatch, useSelector } from "react-redux";
+import type { RootState } from "../../store";
 
-export default function RegisterScreen() {
+export default function Register() {
+  const dispatch = useDispatch();
+  const user = useSelector((s: RootState) => s.auth.user);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState<Role>("student");
+  const [err, setErr] = useState<string | null>(null);
 
-  const handleRegister = () => {
-    // TODO: Replace this with your actual register logic
-    console.log("Email:", email);
-    console.log("Password:", password);
+  useEffect(() => {
+    if (user) router.replace("/shalinda/(authed)/dashboard" as any);
+  }, [user]);
+
+  const onRegister = () => {
+    try {
+      dispatch(register({ email, password, role }));
+    } catch (e: any) {
+      setErr(e.message || "Registration failed");
+    }
   };
 
+  if (user) return null;
+
   return (
-    <UnauthenticatedSidebarLayout title="Register">
-      <View style={styles.container}>
-        <Text style={styles.title}>Create Account ✨</Text>
-        <Text style={styles.subtitle}>Join us to continue</Text>
+    <View style={{ flex: 1, justifyContent: "center", padding: 16, gap: 8 }}>
+      <Text style={{ fontSize: 22, fontWeight: "700" }}>Register</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor="#9ca3af"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
-        />
+      <TextInput
+        placeholder="Email"
+        autoCapitalize="none"
+        value={email}
+        onChangeText={setEmail}
+        style={{ borderWidth: 1, padding: 10 }}
+      />
+      <TextInput
+        placeholder="Password"
+        secureTextEntry
+        value={password}
+        onChangeText={setPassword}
+        style={{ borderWidth: 1, padding: 10 }}
+      />
 
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor="#9ca3af"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
-
-        <TouchableOpacity style={styles.button} onPress={handleRegister}>
-          <Text style={styles.buttonText}>Register</Text>
-        </TouchableOpacity>
-        <HomeButton />
+      <Text>Role</Text>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        {(["student", "tutor"] as Role[]).map((r) => (
+          <TouchableOpacity
+            key={r}
+            onPress={() => setRole(r)}
+            style={{
+              borderWidth: 1,
+              padding: 8,
+              backgroundColor: role === r ? "#ddd" : "transparent",
+            }}
+          >
+            <Text>{r}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
-    </UnauthenticatedSidebarLayout>
+
+      <TouchableOpacity
+        onPress={onRegister}
+        style={{ padding: 12, backgroundColor: "#22c55e", marginTop: 8 }}
+      >
+        <Text style={{ color: "#fff", textAlign: "center" }}>Register</Text>
+      </TouchableOpacity>
+
+      {!!err && <Text style={{ color: "red" }}>{err}</Text>}
+      <Text>
+        Have an account? <Link href="/shalinda/login">Login</Link>
+      </Text>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: "#f3f4f6",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 40,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#6b7280",
-    marginBottom: 32,
-  },
-  input: {
-    width: "100%",
-    height: 50,
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-  },
-  button: {
-    width: "100%",
-    height: 50,
-    backgroundColor: "#10b981", // green
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 8,
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-});

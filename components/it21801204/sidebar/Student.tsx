@@ -20,7 +20,7 @@ const items: SidebarItem[] = [
   {
     key: "studentHome",
     label: "Student Home",
-    href: "/shalinda/studentHome",
+    href: "/shalinda/(authed)/student/studentHome",
     icon: "school-outline" as IoniconName,
   },
   {

@@ -32,7 +32,7 @@ const items: SidebarItem[] = [
   {
     key: "tutorHome",
     label: "Tutor Home",
-    href: "/shalinda/tutorHome",
+    href: "/shalinda/(authed)/tutor/tutorHome",
     icon: "briefcase-outline" as IoniconName,
   },
   {
