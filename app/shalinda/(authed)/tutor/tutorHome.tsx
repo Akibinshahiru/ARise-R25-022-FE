@@ -1,8 +1,15 @@
 import RoleAwareSidebarLayout from "@/components/it21801204/RoleAwareSidebarLayout";
 import type { RootState } from "@/store";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import {
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSelector } from "react-redux";
 
 export default function TutorHome() {
@@ -18,16 +25,67 @@ export default function TutorHome() {
 
   if (!user || user.role !== "tutor") return null;
 
+  const cards = [
+    {
+      name: "Create Quiz",
+      path: "/shalinda/(authed)/tutor/createQuiz", // update route if needed
+      colors: ["#4f46e5", "#6366f1"], // indigo gradient
+    },
+    {
+      name: "View Reports",
+      path: "/shalinda/(authed)/tutor/viewReports", // update route if needed
+      colors: ["#059669", "#10b981"], // green gradient
+    },
+  ];
+
   return (
     <RoleAwareSidebarLayout title="Tutor Home">
-      <View style={styles.body}>
-        <Text style={styles.title}>Tutor Home</Text>
-      </View>
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.container}>
+          <View style={styles.row}>
+            {cards.map((card) => (
+              <TouchableOpacity
+                key={card.name}
+                style={{ flex: 0.48 }}
+                onPress={() => router.push({ pathname: card.path } as any)}
+                activeOpacity={0.85}
+              >
+                <LinearGradient colors={card.colors as any} style={styles.card}>
+                  <Text style={styles.cardText}>{card.name}</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </SafeAreaView>
     </RoleAwareSidebarLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  body: { flex: 1, padding: 20, backgroundColor: "#f3f4f6" },
-  title: { fontSize: 24, fontWeight: "700", color: "#111827" },
+  safe: { flex: 1, backgroundColor: "#f3f4f6" },
+  container: { flex: 1, paddingHorizontal: 20, paddingTop: 16 },
+  title: {
+    fontSize: 26,
+    fontWeight: "700",
+    marginBottom: 16,
+    color: "#111827",
+  },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  card: {
+    height: 140,
+    borderRadius: 16,
+    padding: 16,
+    justifyContent: "flex-end",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  cardText: { color: "#fff", fontSize: 18, fontWeight: "700" },
 });

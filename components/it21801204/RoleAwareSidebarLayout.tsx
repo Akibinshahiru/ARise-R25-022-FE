@@ -22,9 +22,15 @@ function itemsFor(role: "tutor" | "student" | undefined): SidebarItem[] {
         icon: "briefcase-outline" as any,
       },
       {
-        key: "classes",
-        label: "My Classes",
-        href: "/shalinda/(authed)/tutor/classes",
+        key: "createQuiz",
+        label: "Create Quiz",
+        href: "/shalinda/(authed)/tutor/createQuiz",
+        icon: "people-outline" as any,
+      },
+      {
+        key: "viewReport",
+        label: "View Report",
+        href: "/shalinda/(authed)/tutor/viewReport",
         icon: "people-outline" as any,
       },
     ];
