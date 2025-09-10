@@ -1,5 +1,6 @@
-import React, { useMemo } from "react";
-import { StyleSheet, View } from "react-native";
+import React, { useMemo, useEffect } from "react";
+import { StyleSheet, View, Text } from "react-native";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { WebView } from "react-native-webview";
 
 type Props = {
@@ -11,9 +12,23 @@ const DEFAULT_STORY =
   "On a sunny morning, a small yacht glided over the sparkling sea. The wind filled its sail like a kite, and the bow cut gentle waves that whispered, 'yacht, yacht' as it danced toward the horizon.";
 
 export default function ARWordStory({ word = "yacht", storyText = DEFAULT_STORY }: Props) {
+  const [permission, requestPermission] = useCameraPermissions();
+  useEffect(() => {
+    if (!permission?.granted) requestPermission();
+  }, [permission?.granted]);
+
   const html = useMemo(() => getHtml(word, storyText), [word, storyText]);
   return (
     <View style={styles.root}>
+      {/* Native camera preview behind WebView */}
+      {permission?.granted ? (
+        <CameraView style={StyleSheet.absoluteFill} facing="back" />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, styles.permissionOverlay]}>
+          <Text style={styles.permissionText}>Grant camera permission to use AR</Text>
+        </View>
+      )}
+
       <WebView
         originWhitelist={["*"]}
         javaScriptEnabled
@@ -25,7 +40,8 @@ export default function ARWordStory({ word = "yacht", storyText = DEFAULT_STORY 
         onPermissionRequest={(e: any) => {
           try { e.grant(e.resources); } catch {}
         }}
-        style={{ backgroundColor: "black" }}
+        style={{ backgroundColor: "transparent" }}
+        androidLayerType="hardware"
         source={{ html }}
       />
     </View>
@@ -38,15 +54,13 @@ function getHtml(word: string, story: string) {
 <head>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
   <style>
-    html,body,#app{height:100%;margin:0;overflow:hidden;background:#000}
-    #camera{position:fixed;inset:0;object-fit:cover;width:100%;height:100%;z-index:0;}
+    html,body,#app{height:100%;margin:0;overflow:hidden;background:transparent}
     #three{position:fixed;inset:0;z-index:1;}
     .story{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:88%;padding:14px 16px;border-radius:16px;background:rgba(255,255,255,0.85);backdrop-filter:blur(6px);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;line-height:1.35;color:#3b0764;z-index:2;box-shadow:0 10px 24px rgba(0,0,0,.25)}
     .title{font-weight:900;margin:0 0 6px 0;font-size:18px}
   </style>
 </head>
 <body>
-  <video id="camera" playsinline autoplay muted></video>
   <canvas id="three"></canvas>
   <div class="story">
     <div class="title">Word: ${word}</div>
@@ -54,15 +68,7 @@ function getHtml(word: string, story: string) {
   </div>
 
   <script>
-    (async function initCamera(){
-      try{
-        const stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
-        const v = document.getElementById('camera');
-        v.srcObject = stream;
-      }catch(e){
-        console.error('Camera error', e);
-      }
-    })();
+    // Camera handled natively; no getUserMedia here
   </script>
 
   <script src="https://unpkg.com/three@0.161.0/build/three.min.js"></script>
@@ -146,5 +152,9 @@ function getHtml(word: string, story: string) {
 </html>`;
 }
 
-const styles = StyleSheet.create({ root: { flex: 1, backgroundColor: "#000" } });
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: "#000" },
+  permissionOverlay: { justifyContent: "flex-end", alignItems: "center", padding: 16 },
+  permissionText: { color: "#fff", fontWeight: "700" },
+});
 
