@@ -1,5 +1,6 @@
 import axios from "axios";
 import { Audio } from "expo-av";
+import { Camera } from "expo-camera";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Easing, Image, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import ARWordStory from "./ARWordStory";
@@ -76,6 +77,7 @@ export default function EpisodeStoryPlayer({ word, initialData, requireARBeforeA
   const [isRecording, setIsRecording] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [micError, setMicError] = useState<string | null>(null);
+  const [camError, setCamError] = useState<string | null>(null);
 
   const confetti = useRef(new Animated.Value(0)).current;
 
@@ -184,7 +186,19 @@ export default function EpisodeStoryPlayer({ word, initialData, requireARBeforeA
     if (index < total - 1) setIndex((i) => i + 1);
   }, [index, total]);
 
-  const onOpenAR = useCallback(() => setArOpen(true), []);
+  const onOpenAR = useCallback(async () => {
+    try {
+      setCamError(null);
+      const perm = await Camera.requestCameraPermissionsAsync();
+      if (perm.status !== "granted") {
+        setCamError("Camera permission denied. Please allow camera to use AR.");
+        return;
+      }
+      setArOpen(true);
+    } catch (e: any) {
+      setCamError(e?.message || "Failed to request camera permission");
+    }
+  }, []);
   const onCloseAR = useCallback(() => setArOpen(false), []);
   const onCompleteAR = useCallback(() => {
     setArCompleted(true);
@@ -299,6 +313,7 @@ export default function EpisodeStoryPlayer({ word, initialData, requireARBeforeA
         ) : null}
 
         {!!micError && <Text style={[styles.attempts, { marginTop: 6 }]}>{micError}</Text>}
+        {!!camError && <Text style={[styles.attempts, { marginTop: 4 }]}>{camError}</Text>}
 
         {/* Encouragement after 3 failed attempts */}
         {attempts >= 3 && needsPronunciation ? (
