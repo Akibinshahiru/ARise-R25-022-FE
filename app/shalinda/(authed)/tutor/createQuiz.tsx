@@ -119,8 +119,18 @@ export default function CreateQuizScreen() {
   };
 
   const handleGenerate = () => {
-    // Keep this simple; you can navigate or call backend from here.
-    console.log("Generating quiz with words:", words);
+    // Avoid empty submissions
+    if (!words.length) {
+      Alert.alert("No words selected", "Please add at least one word.");
+      return;
+    }
+
+    // Expo Router params must be strings — encode the JSON
+    const payload = encodeURIComponent(JSON.stringify(words));
+    router.push({
+      pathname: "/shalinda/(authed)/tutor/quizPreview",
+      params: { words: payload },
+    });
   };
 
   const filteredSuggested = useMemo(() => {
