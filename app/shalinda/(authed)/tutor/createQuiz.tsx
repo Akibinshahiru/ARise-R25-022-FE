@@ -22,15 +22,7 @@ import {
 } from "react-native";
 import { useSelector } from "react-redux";
 
-const PREPOPULATED_WORDS = [
-  "Cat",
-  "Calculator",
-  "Man",
-  "Satellite",
-  "Excavator",
-  "House",
-  "Temple",
-];
+const PREPOPULATED_WORDS: string[] = [];
 
 type Suggested = { word: string; common_mistakes: string[] };
 
