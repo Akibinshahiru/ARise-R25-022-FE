@@ -12,7 +12,8 @@ import {
 } from "react-native";
 import { useDispatch, useSelector } from "react-redux";
 
-const API_URL = "http://192.168.1.9:8080"; // ← replace with your machine's IP if needed
+const API_URL =
+  process.env.EXPO_PUBLIC_AUTH_API_URL ?? "http://192.168.8.195:8080";
 
 export default function LoginScreen() {
   const dispatch = useDispatch();
@@ -45,6 +46,8 @@ export default function LoginScreen() {
       if (!res.ok) throw new Error("Login failed");
 
       const data = await res.json();
+      console.log(data);
+
       // expected: { message, uid, idToken, role, email }
       if (!data?.uid || !data?.idToken || !data?.role) {
         throw new Error("Invalid login response");
