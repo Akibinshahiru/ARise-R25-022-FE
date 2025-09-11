@@ -2,7 +2,7 @@
 
 /**
  * Generate a kid-friendly sentence for a given word.
- * Later, you can replace this with an API call or ML model.
+ * Replace with your API/ML service later.
  */
 export function generateSentence(word: string): string {
   const templates = [
@@ -12,17 +12,14 @@ export function generateSentence(word: string): string {
     `Let’s draw a picture of a ${word}.`,
     `My friend likes the word ${word}.`,
     `Do you know how to read ${word}?`,
+    `We used the word ${word} to make a fun rhyme.`,
+    `Point to the ${word} when you hear it.`,
   ];
-
   const index = Math.floor(Math.random() * templates.length);
   return templates[index];
 }
 
-/**
- * Bulk helper: generate sentences for a list of words
- */
-export function generateSentences(
-  words: string[]
-): { word: string; sentence: string }[] {
+/** Bulk helper */
+export function generateSentences(words: string[]) {
   return words.map((w) => ({ word: w, sentence: generateSentence(w) }));
 }
