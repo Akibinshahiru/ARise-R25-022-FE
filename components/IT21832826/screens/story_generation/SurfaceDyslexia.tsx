@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Alert, Platform } from "react-native";
+import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Alert, Platform, Animated, Easing } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 
 type Props = {
   title?: string;
@@ -14,11 +15,46 @@ export default function SurfaceDyslexia({ title = "Surface Dyslexia" }: Props) {
   const [scanning, setScanning] = useState(false);
   const [hasScanned, setHasScanned] = useState(false);
 
+  // Animated background + scanner chrome
+  const floatA = useRef(new Animated.Value(0)).current;
+  const floatB = useRef(new Animated.Value(0)).current;
+  const floatC = useRef(new Animated.Value(0)).current;
+  const pulse = useRef(new Animated.Value(0)).current;
+  const sweep = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     // Pre-warm permission prompt so kids can start quickly
     if (!permission?.granted) requestPermission();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [permission?.granted]);
+
+  // background floaters
+  useEffect(() => {
+    const mk = (v: Animated.Value, duration: number, delay = 0) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(v, { toValue: 1, duration, delay, useNativeDriver: true, easing: Easing.inOut(Easing.quad) }),
+          Animated.timing(v, { toValue: 0, duration, useNativeDriver: true, easing: Easing.inOut(Easing.quad) }),
+        ])
+      );
+    const a = mk(floatA, 6500, 0), b = mk(floatB, 7200, 400), c = mk(floatC, 8000, 900);
+    a.start(); b.start(); c.start();
+    return () => { a.stop(); b.stop(); c.stop(); };
+  }, [floatA, floatB, floatC]);
+
+  // scanner pulse + sweep
+  useEffect(() => {
+    const p = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true, easing: Easing.inOut(Easing.quad) }),
+      Animated.timing(pulse, { toValue: 0, duration: 900, useNativeDriver: true, easing: Easing.inOut(Easing.quad) }),
+    ]));
+    const s = Animated.loop(Animated.sequence([
+      Animated.timing(sweep, { toValue: 1, duration: 2200, useNativeDriver: true, easing: Easing.inOut(Easing.cubic) }),
+      Animated.timing(sweep, { toValue: 0, duration: 2200, useNativeDriver: true, easing: Easing.inOut(Easing.cubic) }),
+    ]));
+    p.start(); s.start();
+    return () => { p.stop(); s.stop(); };
+  }, [pulse, sweep]);
 
   const startScanner = useCallback(async () => {
     if (!permission?.granted) {
@@ -88,10 +124,23 @@ export default function SurfaceDyslexia({ title = "Surface Dyslexia" }: Props) {
 
   return (
     <SafeAreaView style={styles.root}>
-      {/* Playful blob background using existing palette */}
-      <View style={styles.blobOne} />
-      <View style={styles.blobTwo} />
-      <View style={styles.blobThree} />
+      {/* Gradient + animated playful blobs */}
+      <LinearGradient colors={["#fff7e6", "#fcefe2", "#f9e6ff"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+      <Animated.View style={[styles.blobOne, { transform: [
+        { translateY: floatA.interpolate({ inputRange: [0,1], outputRange: [0, -10] }) },
+        { translateX: floatA.interpolate({ inputRange: [0,1], outputRange: [0, 8] }) },
+        { scale: floatA.interpolate({ inputRange: [0,1], outputRange: [1, 1.03] }) },
+      ] }]} />
+      <Animated.View style={[styles.blobTwo, { transform: [
+        { translateY: floatB.interpolate({ inputRange: [0,1], outputRange: [0, 12] }) },
+        { translateX: floatB.interpolate({ inputRange: [0,1], outputRange: [0, -10] }) },
+        { scale: floatB.interpolate({ inputRange: [0,1], outputRange: [1, 1.04] }) },
+      ] }]} />
+      <Animated.View style={[styles.blobThree, { transform: [
+        { translateY: floatC.interpolate({ inputRange: [0,1], outputRange: [0, -8] }) },
+        { translateX: floatC.interpolate({ inputRange: [0,1], outputRange: [0, 6] }) },
+        { scale: floatC.interpolate({ inputRange: [0,1], outputRange: [1, 1.02] }) },
+      ] }]} />
 
       {Brand}
 
@@ -123,12 +172,29 @@ export default function SurfaceDyslexia({ title = "Surface Dyslexia" }: Props) {
           {/* Overlay with cutout */}
           <View pointerEvents="none" style={styles.mask} />
 
-          <View style={styles.scanFrame}>
+          <Animated.View
+            style={[
+              styles.scanFrame,
+              {
+                transform: [{ scale: pulse.interpolate({ inputRange: [0,1], outputRange: [1, 1.02] }) }],
+                shadowOpacity: pulse.interpolate({ inputRange: [0,1], outputRange: [0.15, 0.3] }) as any,
+              },
+            ]}
+          >
             <View style={styles.cornerTL} />
             <View style={styles.cornerTR} />
             <View style={styles.cornerBL} />
             <View style={styles.cornerBR} />
-          </View>
+            <Animated.View
+              style={[
+                styles.scanLine,
+                {
+                  transform: [{ translateY: sweep.interpolate({ inputRange: [0,1], outputRange: [8, 240 - 8] }) }],
+                  opacity: pulse.interpolate({ inputRange: [0,1], outputRange: [0.6, 0.9] }),
+                },
+              ]}
+            />
+          </Animated.View>
 
           <View style={styles.scannerTopBar}>
             <TouchableOpacity onPress={stopScanner} style={styles.navBtn}>
@@ -224,11 +290,15 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderColor: "rgba(255,255,255,0.15)",
     borderWidth: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 16,
   },
   cornerTL: { position: "absolute", left: -2, top: -2, width: 34, height: 34, borderLeftWidth: 4, borderTopWidth: 4, borderColor: YELLOW, borderTopLeftRadius: 22 },
   cornerTR: { position: "absolute", right: -2, top: -2, width: 34, height: 34, borderRightWidth: 4, borderTopWidth: 4, borderColor: YELLOW, borderTopRightRadius: 22 },
   cornerBL: { position: "absolute", left: -2, bottom: -2, width: 34, height: 34, borderLeftWidth: 4, borderBottomWidth: 4, borderColor: YELLOW, borderBottomLeftRadius: 22 },
   cornerBR: { position: "absolute", right: -2, bottom: -2, width: 34, height: 34, borderRightWidth: 4, borderBottomWidth: 4, borderColor: YELLOW, borderBottomRightRadius: 22 },
+  scanLine: { position: "absolute", left: 8, right: 8, height: 4, borderRadius: 2, backgroundColor: "rgba(250,204,21,0.6)" },
   scannerHintRow: { position: "absolute", bottom: 40, left: 0, right: 0, alignItems: "center" },
   scannerHint: { color: "#fff", fontWeight: "800", backgroundColor: "rgba(0,0,0,0.35)", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14 },
 });
