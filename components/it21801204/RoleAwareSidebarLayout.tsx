@@ -5,8 +5,17 @@ import {
   SidebarTrigger,
 } from "@/components/shared/Sidebar";
 import type { RootState } from "@/store";
-import { SafeAreaView, StyleSheet, Text, View } from "react-native";
-import { useSelector } from "react-redux";
+import { setUser } from "@/store/IT21801204/authSlice";
+import { Ionicons } from "@expo/vector-icons";
+import {
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useDispatch, useSelector } from "react-redux";
+import { router } from "expo-router";
 
 type SidebarItem = React.ComponentProps<
   typeof SidebarContainer
@@ -61,6 +70,15 @@ export default function RoleAwareSidebarLayout({
   title,
   children,
 }: React.PropsWithChildren<{ title: string }>) {
+  const dispatch = useDispatch();
+
+  const handleLogout = () => {
+    // Clear user from redux
+    dispatch(setUser(null as any));
+    // Redirect to login
+    router.replace("/shalinda/login");
+  };
+
   const role = useSelector((s: RootState) => s.auth.user?.role);
   const items = itemsFor(role);
 
@@ -69,7 +87,31 @@ export default function RoleAwareSidebarLayout({
       <SidebarContainer
         items={items}
         header={<Text style={{ fontSize: 18, fontWeight: "700" }}>ARise</Text>}
-        footer={<Text style={{ color: "#666" }}>{role}</Text>}
+        footer={
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <Text style={{ color: "#666" }}>{role}</Text>
+            <TouchableOpacity
+              onPress={handleLogout}
+              style={{ flexDirection: "row", alignItems: "center" }}
+            >
+              <Ionicons
+                name="log-out-outline"
+                size={18}
+                color="#dc2626"
+                style={{ marginRight: 6 }}
+              />
+              <Text style={{ color: "#dc2626", fontWeight: "600" }}>
+                Logout
+              </Text>
+            </TouchableOpacity>
+          </View>
+        }
       >
         <SafeAreaView style={styles.safe}>
           <View style={styles.topbar}>

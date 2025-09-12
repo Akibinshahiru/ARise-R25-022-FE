@@ -4,9 +4,18 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/shared/Sidebar";
+import { setUser } from "@/store/IT21801204/authSlice";
 import { Ionicons } from "@expo/vector-icons";
 import type { ComponentProps, PropsWithChildren } from "react";
-import { SafeAreaView, StyleSheet, Text, View } from "react-native";
+import {
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { useDispatch } from "react-redux";
+import { router } from "expo-router";
 
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
@@ -47,6 +56,15 @@ export function TutorSidebarLayout({
   title = "Tutor",
   children,
 }: PropsWithChildren<{ title?: string }>) {
+  const dispatch = useDispatch();
+
+  const handleLogout = () => {
+    // Clear user from redux
+    dispatch(setUser(null as any));
+    // Redirect to login
+    router.replace("/shalinda/login");
+  };
+
   return (
     <SidebarProvider>
       <SidebarContainer
@@ -56,7 +74,31 @@ export function TutorSidebarLayout({
             ARise (IT21801204)
           </Text>
         }
-        footer={<Text style={{ color: "#666" }}>Tutor</Text>}
+        footer={
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <Text style={{ color: "#666" }}>Tutor</Text>
+            <TouchableOpacity
+              onPress={handleLogout}
+              style={{ flexDirection: "row", alignItems: "center" }}
+            >
+              <Ionicons
+                name="log-out-outline"
+                size={18}
+                color="#dc2626"
+                style={{ marginRight: 6 }}
+              />
+              <Text style={{ color: "#dc2626", fontWeight: "600" }}>
+                Logout
+              </Text>
+            </TouchableOpacity>
+          </View>
+        }
       >
         <SafeAreaView style={styles.safe}>
           <View style={styles.topbar}>
