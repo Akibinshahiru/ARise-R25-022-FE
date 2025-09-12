@@ -74,7 +74,7 @@ export default function QuizPreviewScreen() {
   const recordingRef = useRef<Audio.Recording | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
   const QUIZ_API_URL =
-    process.env.EXPO_PUBLIC_QUIZ_API_URL ?? "http://192.168.8.195:8082";
+    process.env.EXPO_PUBLIC_QUIZ_API_URL ?? "http://192.168.1.9:8082";
 
   // Permissions — ask once on mount
   useEffect(() => {
@@ -243,27 +243,54 @@ export default function QuizPreviewScreen() {
     }
   };
 
-  const confirmCreate = () => {
+  const confirmCreate = async () => {
     console.log(items);
+    // transform to backend format
+    const payload = {
+      title: "Test Quiz", // you can make this dynamic
+      questions: items.map((i) => ({
+        sentence: i.sentence,
+        answer: i.word,
+        ...(i.imageUrl ? { imageUrl: i.imageUrl } : {}),
+        ...(i.audioUrl ? { audioUrl: i.audioUrl } : {}),
+      })),
+    };
 
-    if (!items.length) {
-      Alert.alert("No words found", "Go back and add some words first.");
-      return;
+    try {
+      console.log("Sending payload");
+      console.log(payload);
+
+      const res = await fetch(`${QUIZ_API_URL}/quiz`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.idToken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed to create quiz");
+      }
+
+      const data = await res.json();
+      console.log("Quiz created:", data);
+
+      Alert.alert("Success 🎉", "Quiz created successfully", [
+        {
+          text: "OK",
+          onPress: () =>
+            router.replace({
+              pathname: "/shalinda/(authed)/tutor/quizShare",
+              params: { quiz: encodeURIComponent(JSON.stringify(data)) },
+            }),
+        },
+      ]);
+    } catch (e: any) {
+      console.error("Quiz create error:", e);
+      Alert.alert("Error", e.message || "Something went wrong");
     }
-
-    // TODO: Hook to backend or Redux here:
-    // api.createQuiz({ items }) or dispatch(saveQuizDraft(items))
-
-    // Alert.alert(
-    //   "Quiz Created 🎉",
-    //   `Words: ${items.map((i) => i.word).join(", ")}`,
-    //   [
-    //     {
-    //       text: "Done",
-    //       onPress: () => router.replace("/shalinda/(authed)/tutorHome"),
-    //     },
-    //   ]
-    // );
   };
 
   const renderRow = ({ item, index }: { item: Item; index: number }) => {
