@@ -28,8 +28,8 @@ type Item = {
   id: string; // word-index key
   word: string;
   sentence: string;
-  imageUri?: string | null;
-  audioUri?: string | null;
+  imageUrl?: string | null;
+  audioUrl?: string | null;
   isRecording?: boolean;
 };
 
@@ -54,8 +54,8 @@ export default function QuizPreviewScreen() {
         id: `${w}-${idx}`,
         word: w,
         sentence: generateSentence(w),
-        imageUri: null,
-        audioUri: null,
+        imageUrl: null,
+        audioUrl: null,
         isRecording: false,
       }));
     } catch {
@@ -73,6 +73,8 @@ export default function QuizPreviewScreen() {
   // Media/recording refs
   const recordingRef = useRef<Audio.Recording | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
+  const QUIZ_API_URL =
+    process.env.EXPO_PUBLIC_QUIZ_API_URL ?? "http://192.168.8.195:8082";
 
   // Permissions — ask once on mount
   useEffect(() => {
@@ -114,6 +116,33 @@ export default function QuizPreviewScreen() {
     updateItem(it.id, { sentence: generateSentence(it.word) });
   };
 
+  // === File upload helper ===
+
+  const uploadFile = async (uri: string, folder: string) => {
+    const formData = new FormData();
+    const ext = uri.split(".").pop() || "jpg";
+    const type = ext === "m4a" ? "audio/m4a" : "image/jpeg";
+
+    formData.append("file", {
+      uri,
+      name: `upload.${ext}`,
+      type,
+    } as any);
+
+    formData.append("folder", folder);
+
+    const res = await fetch(`${QUIZ_API_URL}/media/upload`, {
+      method: "POST",
+      body: formData,
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+
+    if (!res.ok) throw new Error("Upload failed");
+    return (await res.json()) as { publicUrl: string; path: string };
+  };
+
   const onPickImage = async (it: Item) => {
     try {
       const res = await ImagePicker.launchImageLibraryAsync({
@@ -122,7 +151,14 @@ export default function QuizPreviewScreen() {
         quality: 0.8,
       });
       if (!res.canceled && res.assets?.length) {
-        updateItem(it.id, { imageUri: res.assets[0].uri });
+        // updateItem(it.id, { imageUrl: res.assets[0].uri });
+        console.log(res.assets[0].uri);
+
+        // upload to backend
+        const uploaded = await uploadFile(res.assets[0].uri, "uploads");
+        console.log(uploaded);
+
+        updateItem(it.id, { imageUrl: uploaded.publicUrl });
       }
     } catch (e) {
       Alert.alert("Image error", "Could not pick the image.");
@@ -165,7 +201,15 @@ export default function QuizPreviewScreen() {
         } catch {}
         const uri = recordingRef.current.getURI();
         recordingRef.current = null;
-        updateItem(it.id, { isRecording: false, audioUri: uri ?? null });
+        updateItem(it.id, { isRecording: false, audioUrl: uri ?? null });
+
+        console.log(uri);
+
+        if (uri) {
+          const uploaded = await uploadFile(uri, "uploads");
+          updateItem(it.id, { audioUrl: uploaded.publicUrl });
+        }
+
         return;
       }
 
@@ -200,6 +244,8 @@ export default function QuizPreviewScreen() {
   };
 
   const confirmCreate = () => {
+    console.log(items);
+
     if (!items.length) {
       Alert.alert("No words found", "Go back and add some words first.");
       return;
@@ -281,11 +327,11 @@ export default function QuizPreviewScreen() {
         <Text style={styles.sentenceText}>{item.sentence}</Text>
 
         {/* Image preview (if any) */}
-        {item.imageUri ? (
+        {item.imageUrl ? (
           <View style={styles.imageWrap}>
-            <Image source={{ uri: item.imageUri }} style={styles.image} />
+            <Image source={{ uri: item.imageUrl }} style={styles.image} />
             <TouchableOpacity
-              onPress={() => updateItem(item.id, { imageUri: null })}
+              onPress={() => updateItem(item.id, { imageUrl: null })}
               style={styles.removeBadge}
             >
               <Ionicons name="close" size={16} color="#111827" />
@@ -296,22 +342,22 @@ export default function QuizPreviewScreen() {
         {/* Audio controls */}
         <View style={styles.audioRow}>
           <TouchableOpacity
-            onPress={() => playAudio(item.audioUri)}
+            onPress={() => playAudio(item.audioUrl)}
             style={[
               styles.smallButton,
-              !item.audioUri && styles.smallButtonDisabled,
+              !item.audioUrl && styles.smallButtonDisabled,
             ]}
-            disabled={!item.audioUri}
+            disabled={!item.audioUrl}
           >
             <Ionicons name="play" size={16} color="#fff" />
             <Text style={styles.smallButtonText}>Play</Text>
           </TouchableOpacity>
 
-          {item.audioUri ? (
+          {item.audioUrl ? (
             <TouchableOpacity
               onPress={async () => {
                 await stopAndUnloadSound();
-                updateItem(item.id, { audioUri: null });
+                updateItem(item.id, { audioUrl: null });
               }}
               style={[styles.smallButton, { backgroundColor: "#DC2626" }]}
             >
