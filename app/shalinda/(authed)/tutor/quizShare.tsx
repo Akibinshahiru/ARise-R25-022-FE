@@ -20,7 +20,7 @@ export default function QuizShareScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.container}>
-        <Text style={styles.heading}>🎉 Quiz Created!</Text>
+        <Text style={styles.heading}>🎉 Quiz Invite!</Text>
         <Text style={styles.subheading}>
           Ask your students to scan this QR to join:
         </Text>
