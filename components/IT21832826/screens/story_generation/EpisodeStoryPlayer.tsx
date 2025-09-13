@@ -1,11 +1,11 @@
 import axios from "axios";
 import { Asset } from "expo-asset";
+import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Speech from "expo-speech";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Animated, Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { Audio } from "expo-av";
 import ARThreeOverlay from "./ARThreeOverlay";
 
 // ---------- Types ----------
@@ -31,7 +31,7 @@ type Props = {
 
 // ---------- API helpers ----------
 function getStoryApiBase(): string {
-  return (process.env.EXPO_PUBLIC_API_BASE_URL_STORY as string) || "http://192.168.8.119:8001";
+  return (process.env.EXPO_PUBLIC_API_BASE_URL_STORY as string) || "http://localhost:8001";
 }
 
 async function fetchStoryForWord(word: string): Promise<StoryResponse> {
