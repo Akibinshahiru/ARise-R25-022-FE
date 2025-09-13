@@ -5,6 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Speech from "expo-speech";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Animated, Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Audio } from "expo-av";
 import ARThreeOverlay from "./ARThreeOverlay";
 
 // ---------- Types ----------
@@ -82,6 +83,8 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
   const [arOpen, setArOpen] = useState(false);
   const [showBurst, setShowBurst] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
+  const [listening, setListening] = useState(false);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [evalVisible, setEvalVisible] = useState(false);
   const [evalResult, setEvalResult] = useState<any | null>(null);
 
@@ -181,19 +184,45 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
     try { Speech.speak(word, { rate, pitch: 1.2, language: 'en-US' }); } catch {}
   }, [word]);
 
-  const onEvaluate = useCallback(async () => {
-    if (!current) return;
+  const startRecording = useCallback(async () => {
     try {
-      setEvaluating(true);
-      const result = await evaluatePronunciation(scanned, current.text);
-      setEvalResult(result || {});
-      setEvalVisible(true);
+      const perm = await Audio.requestPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Microphone needed', 'Please allow microphone to record your pronunciation.');
+        return;
+      }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const rec = new Audio.Recording();
+      await rec.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      await rec.startAsync();
+      setRecording(rec);
+      setListening(true);
+      setTimeout(async () => {
+        try { await rec.stopAndUnloadAsync(); } catch {}
+        setRecording(null);
+        setListening(false);
+        setEvaluating(true);
+        try {
+          const result = await evaluatePronunciation(scanned, current?.text || '');
+          setEvalResult(result || {});
+          setEvalVisible(true);
+        } catch (e: any) {
+          Alert.alert('Pronunciation', e?.message || 'Failed to evaluate');
+        } finally {
+          setEvaluating(false);
+        }
+      }, 2500);
     } catch (e: any) {
-      Alert.alert('Pronunciation', e?.message || 'Failed to evaluate');
-    } finally {
-      setEvaluating(false);
+      setListening(false);
+      setRecording(null);
+      Alert.alert('Microphone', e?.message || 'Could not start recording');
     }
   }, [current, scanned]);
+
+  const onEvaluate = useCallback(async () => {
+    if (!current || listening || evaluating) return;
+    await startRecording();
+  }, [current, listening, evaluating, startRecording]);
 
   useEffect(() => { if (autoOpenAR) setArOpen(true); }, [autoOpenAR]);
 
@@ -274,8 +303,8 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
                 <TouchableOpacity onPress={() => speak(0.75)} style={[styles.button, styles.secondary, styles.actionBtn]}>
                   <Text style={[styles.buttonText, { color: '#1f1147' }]}>Slow</Text>
                 </TouchableOpacity>
-                <TouchableOpacity disabled={evaluating} onPress={onEvaluate} style={[styles.button, styles.secondary, styles.actionBtn, evaluating && { opacity: 0.6 }] as any}>
-                  <Text style={[styles.buttonText, { color: '#1f1147' }]}>{evaluating ? 'Evaluating…' : 'Evaluate'}</Text>
+                <TouchableOpacity disabled={evaluating || listening} onPress={onEvaluate} style={[styles.button, styles.secondary, styles.actionBtn, (evaluating || listening) && { opacity: 0.6 }] as any}>
+                  <Text style={[styles.buttonText, { color: '#1f1147' }]}>{evaluating ? 'Evaluating…' : (listening ? 'Listening…' : 'Evaluate')}</Text>
                 </TouchableOpacity>
               </>
             ) : null}
@@ -304,6 +333,18 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
       {/* Magic burst on next */}
       {showBurst ? <MagicBurst /> : null}
 
+      {/* Listening overlay */}
+      <Modal visible={listening} transparent animationType="fade" onRequestClose={() => {}}>
+        <View style={styles.listenOverlay}>
+          <View style={styles.listenCard}>
+            <Text style={styles.listenTitle}>Say the word</Text>
+            <Text style={styles.listenEmoji}>⭐</Text>
+            <Text style={styles.listenWord}>{scanned}</Text>
+            <Text style={styles.listenHint}>Listening… 3 seconds</Text>
+          </View>
+        </View>
+      </Modal>
+
       {/* Pronunciation Result Modal */}
       <Modal visible={evalVisible} transparent animationType="fade" onRequestClose={() => setEvalVisible(false)}>
         <View style={styles.evalOverlay}>
@@ -312,7 +353,7 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
             {(() => {
               const s = Math.max(0, Math.min(1, Number(evalResult?.pronunciation_score ?? 0)));
               const pct = Math.round(s * 100);
-              const mood = pct >= 90 ? '🌟' : pct >= 70 ? '😊' : pct >= 50 ? '👍' : '💪';
+              const mood = pct >= 90 ? '🌟' : pct >= 70 ? '😊' : pct >= 50 ? '👍' : '⭐';
               return (
                 <>
                   <Text style={styles.evalEmoji}>{evalResult?.show_trophy ? '🏆' : mood}</Text>
@@ -448,4 +489,12 @@ const styles = StyleSheet.create({
   evalHint: { marginTop: 6, color: '#6b7280' },
   evalButtonsRow: { marginTop: 16, flexDirection: 'row', justifyContent: 'space-between' },
   evalBtn: { flex: 1, marginHorizontal: 4 },
+
+  // Listening overlay styles
+  listenOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  listenCard: { width: '100%', maxWidth: 420, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 24, alignItems: 'center' },
+  listenTitle: { fontSize: 18, fontWeight: '900', color: '#1f1147' },
+  listenEmoji: { fontSize: 48, marginVertical: 8 },
+  listenWord: { fontSize: 22, fontWeight: '800', color: '#6d28d9' },
+  listenHint: { marginTop: 8, color: '#6b7280' },
 });
