@@ -1,3 +1,4 @@
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from "axios";
 import { Asset } from "expo-asset";
@@ -98,7 +99,7 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
   const [quizDone, setQuizDone] = useState(false);
   const [quizCorrect, setQuizCorrect] = useState<boolean | null>(null);
   const [quizSelection, setQuizSelection] = useState<string | null>(null);
-  const [quizOptions, setQuizOptions] = useState<Array<{ key: string; label: string; emoji: string; correct: boolean }>>([]);
+  const [quizOptions, setQuizOptions] = useState<Array<{ key: string; label: string; iconName: string; imageUri?: string; correct: boolean }>>([]);
 
   const float1 = useRef(new Animated.Value(0)).current;
   const float2 = useRef(new Animated.Value(0)).current;
@@ -155,8 +156,31 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
   }
 
   function getImageUrlForQuery(query: string): string {
-    const q = encodeURIComponent(query);
-    return `https://source.unsplash.com/600x400/?${q}`;
+    // picsum provides direct image URLs (no redirects) and is reliable on RN
+    const q = encodeURIComponent(query || 'image');
+    return `https://picsum.photos/seed/${q}/600/400`;
+  }
+
+  // Icon mapping for kid-friendly quiz (MaterialCommunityIcons)
+  function getIconForWord(w: string): string {
+    const s = (w || '').trim().toLowerCase();
+    const map: Record<string, string> = {
+      yacht: 'sail-boat', boat: 'sail-boat', ship: 'ferry', car: 'car', apple: 'apple', dog: 'dog', cat: 'cat', fish: 'fish', bird: 'bird', sun: 'white-balance-sunny', moon: 'moon-waning-crescent', star: 'star', rocket: 'rocket', tree: 'tree', flower: 'flower', ball: 'soccer', book: 'book',
+    };
+    return map[s] || 'star';
+  }
+
+  // Remote kid‑friendly images (OpenMoji PNGs via GitHub raw)
+  function getRemoteImageForWord(w: string): string | null {
+    const s = (w || '').trim().toLowerCase();
+    const map: Record<string, string> = {
+      yacht: '1F6A4', boat: '1F6A4', ship: '1F6A2',
+      car: '1F697', apple: '1F34E', dog: '1F436', cat: '1F431',
+      fish: '1F41F', bird: '1F426', sun: '2600', moon: '1F319', star: '2B50',
+      rocket: '1F680', tree: '1F333', flower: '1F33C', ball: '26BD', book: '1F4D8'
+    };
+    const code = map[s];
+    return code ? `https://raw.githubusercontent.com/hfg-gmuend/openmoji/master/color/618x618/${code}.png` : null;
   }
 
   function buildQuizOptions(target: string) {
@@ -167,9 +191,9 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
       if (decoyQueries[i].toLowerCase() !== target.toLowerCase()) decoys.push(decoyQueries[i]);
     }
     const raw = [
-      { key: 'c', label: target, uri: getImageUrlForQuery(target), correct: true, fallbackEmoji: getEmojiForWord(target) },
-      { key: 'd1', label: decoys[0], uri: getImageUrlForQuery(decoys[0]), correct: false, fallbackEmoji: getEmojiForWord(decoys[0]) },
-      { key: 'd2', label: decoys[1], uri: getImageUrlForQuery(decoys[1]), correct: false, fallbackEmoji: getEmojiForWord(decoys[1]) },
+      { key: 'c', label: target, iconName: getIconForWord(target), imageUri: getRemoteImageForWord(target) || undefined, correct: true },
+      { key: 'd1', label: decoys[0], iconName: getIconForWord(decoys[0]), imageUri: getRemoteImageForWord(decoys[0]) || undefined, correct: false },
+      { key: 'd2', label: decoys[1], iconName: getIconForWord(decoys[1]), imageUri: getRemoteImageForWord(decoys[1]) || undefined, correct: false },
     ];
     // shuffle
     for (let i = raw.length - 1; i > 0; i--) {
@@ -187,10 +211,7 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
       setQuizSelection(null);
       setQuizCorrect(null);
       setQuizVisible(true);
-      // Prefetch images to reduce blank states
-      try {
-        opts.forEach(o => { if (o?.uri) Image.prefetch(o.uri); });
-      } catch {}
+      // Icons require no network prefetch
     }
   }, [index, scanned, quizDone]);
 
@@ -486,8 +507,8 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
               {quizOptions.map(opt => (
                 <QuizOption
                   key={opt.key}
-                  imageUri={opt.uri}
-                  fallbackEmoji={opt.fallbackEmoji}
+                  iconName={opt.iconName}
+                  imageUri={opt.imageUri}
                   selected={quizSelection === opt.key}
                   onPress={async () => {
                     if (quizSelection) return; // lock after one
@@ -654,32 +675,32 @@ function ConfettiOverlay({ visible }: { visible: boolean }) {
   );
 }
 
-// Small selectable quiz option (image card)
-function QuizOption({ imageUri, fallbackEmoji, selected, onPress }: { imageUri: string; fallbackEmoji?: string; selected: boolean; onPress: () => void }) {
+// Small selectable quiz option (image with icon fallback)
+function QuizOption({ iconName, imageUri, selected, onPress }: { iconName: string; imageUri?: string; selected: boolean; onPress: () => void }) {
   const scale = useRef(new Animated.Value(1)).current;
   const [errored, setErrored] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   useEffect(() => {
     Animated.spring(scale, { toValue: selected ? 1.06 : 1, useNativeDriver: true, friction: 6, tension: 80 }).start();
   }, [selected, scale]);
   return (
-    <Animated.View style={[styles.quizOption, { transform: [{ scale }] }] }>
-      <TouchableOpacity onPress={onPress} style={styles.quizOptionBtn} activeOpacity={0.9}>
-        {!errored ? (
-          <Image
-            source={{ uri: imageUri }}
-            style={styles.quizOptionImg}
-            resizeMode="cover"
-            onLoadStart={() => setLoading(true)}
-            onLoadEnd={() => setLoading(false)}
-            onError={() => { setErrored(true); setLoading(false); }}
-          />
+    <Animated.View style={[styles.quizOption, { transform: [{ scale }] }]}>
+      <TouchableOpacity onPress={onPress} style={[styles.quizOptionBtn, { alignItems: 'center', justifyContent: 'center' }]} activeOpacity={0.9}>
+        {imageUri && !errored ? (
+          <>
+            <Image
+              source={{ uri: imageUri }}
+              style={styles.quizOptionImg}
+              resizeMode="cover"
+              onLoadStart={() => setLoading(true)}
+              onLoadEnd={() => setLoading(false)}
+              onError={() => { setErrored(true); setLoading(false); }}
+            />
+            {loading ? (<View style={styles.quizLoading}><Text style={styles.quizLoadingText}>Loading…</Text></View>) : null}
+          </>
         ) : (
-          <View style={[styles.quizOptionImg, { alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f3ff' }]}>
-            <Text style={{ fontSize: 42 }}>{fallbackEmoji || '⭐'}</Text>
-          </View>
+          <MaterialCommunityIcons name={iconName as any} size={48} color="#6d28d9" />
         )}
-        {loading && !errored ? (<View style={styles.quizLoading}><Text style={styles.quizLoadingText}>Loading…</Text></View>) : null}
       </TouchableOpacity>
     </Animated.View>
   );
