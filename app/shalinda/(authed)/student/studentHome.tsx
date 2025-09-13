@@ -28,7 +28,12 @@ export default function StudentHome() {
   const cards = [
     {
       name: "Join Quiz",
-      path: "/shalinda/(authed)/student/joinQuiz", // update route if needed
+      path: "/shalinda/(authed)/student/joinQuiz",
+      colors: ["#f5af19", "#f12711"],
+    },
+    {
+      name: "Enrolled Quizes",
+      path: "/shalinda/(authed)/student/quizResults",
       colors: ["#f5af19", "#f12711"],
     },
   ];

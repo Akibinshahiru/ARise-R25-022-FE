@@ -36,7 +36,10 @@ type Item = {
 export default function QuizPreviewScreen() {
   const router = useRouter();
   const user = useSelector((s: RootState) => s.auth.user);
-  const { words } = useLocalSearchParams<{ words?: string }>();
+  const { words, quiz } = useLocalSearchParams<{
+    words?: string;
+    quiz?: string;
+  }>();
 
   // Tutor-only guard
   useEffect(() => {
@@ -48,16 +51,35 @@ export default function QuizPreviewScreen() {
   // Decode list from params and prepare items with generated sentences
   const initialItems: Item[] = useMemo(() => {
     try {
-      const arr = words ? JSON.parse(decodeURIComponent(words)) : [];
-      if (!Array.isArray(arr)) return [];
-      return arr.map((w: string, idx: number) => ({
-        id: `${w}-${idx}`,
-        word: w,
-        sentence: generateSentence(w),
-        imageUrl: null,
-        audioUrl: null,
-        isRecording: false,
-      }));
+      if (quiz) {
+        // Case 1: coming from MyQuizes with full quiz object
+        const parsed = JSON.parse(decodeURIComponent(quiz));
+        if (!parsed?.questions) return [];
+        return parsed.questions.map((q: any, idx: number) => ({
+          id: `${q.answer}-${idx}`,
+          word: q.answer,
+          sentence: q.sentence,
+          imageUrl: q.imageUrl ?? null,
+          audioUrl: q.audioUrl ?? null,
+          isRecording: false,
+        }));
+      }
+
+      if (words) {
+        // Case 2: coming from CreateQuiz with only words
+        const arr = JSON.parse(decodeURIComponent(words));
+        if (!Array.isArray(arr)) return [];
+        return arr.map((w: string, idx: number) => ({
+          id: `${w}-${idx}`,
+          word: w,
+          sentence: generateSentence(w),
+          imageUrl: null,
+          audioUrl: null,
+          isRecording: false,
+        }));
+      }
+
+      return [];
     } catch {
       return [];
     }
@@ -438,9 +460,30 @@ export default function QuizPreviewScreen() {
                 </Text>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={confirmCreate} style={styles.btn}>
-                <Text style={styles.btnText}>Create Quiz ✅</Text>
-              </TouchableOpacity>
+              {quiz && (
+                <TouchableOpacity
+                  onPress={() => {
+                    router.replace({
+                      pathname: "/shalinda/(authed)/tutor/quizShare",
+                      params: {
+                        quizId: JSON.parse(quiz).id ?? "XXXXX",
+                      },
+                    });
+                  }}
+                  style={styles.btn}
+                >
+                  <Text style={styles.btnText}>
+                    Share QR{" "}
+                    <Ionicons name="add-circle-sharp" size={20} color="#fff" />
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {words && (
+                <TouchableOpacity onPress={confirmCreate} style={styles.btn}>
+                  <Text style={styles.btnText}>Create Quiz ✅</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 

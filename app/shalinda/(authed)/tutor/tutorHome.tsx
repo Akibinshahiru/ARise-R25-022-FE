@@ -28,13 +28,18 @@ export default function TutorHome() {
   const cards = [
     {
       name: "Create Quiz",
-      path: "/shalinda/(authed)/tutor/createQuiz", // update route if needed
-      colors: ["#4f46e5", "#6366f1"], // indigo gradient
+      path: "/shalinda/(authed)/tutor/createQuiz",
+      colors: ["#4f46e5", "#6366f1"],
+    },
+    {
+      name: "My Quizes",
+      path: "/shalinda/(authed)/tutor/myQuizes",
+      colors: ["#0083B0", "#00B4DB"],
     },
     {
       name: "View Reports",
-      path: "/shalinda/(authed)/tutor/viewReports", // update route if needed
-      colors: ["#059669", "#10b981"], // green gradient
+      path: "/shalinda/(authed)/tutor/viewReports",
+      colors: ["#059669", "#10b981"],
     },
   ];
 

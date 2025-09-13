@@ -13,8 +13,8 @@ import type { RootState } from "@/store";
 
 export default function QuizShareScreen() {
   const router = useRouter();
-  const { quiz } = useLocalSearchParams<{ quiz?: string }>();
-  const parsedQuiz = quiz ? JSON.parse(decodeURIComponent(quiz)) : null;
+  const { quizId } = useLocalSearchParams<{ quizId: string }>();
+
   const user = useSelector((s: RootState) => s.auth.user);
 
   return (
@@ -26,10 +26,10 @@ export default function QuizShareScreen() {
         </Text>
 
         <View style={styles.qrWrap}>
-          <QRCode value={parsedQuiz.id} size={220} />
+          <QRCode value={quizId} size={220} />
         </View>
 
-        <Text style={styles.linkText}>{parsedQuiz.id}</Text>
+        <Text style={styles.linkText}>{quizId}</Text>
 
         <TouchableOpacity
           style={styles.btn}

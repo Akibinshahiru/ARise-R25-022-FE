@@ -3,7 +3,6 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -26,28 +25,51 @@ export default function StudentQuizScreen() {
   const [currentIdx, setCurrentIdx] = useState(0);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || !user) return;
 
-    const fetchQuiz = async () => {
+    console.log(id, user);
+
+    const assignAndFetch = async () => {
       try {
+        // 1) Assign quiz to student
+        const assignRes = await fetch(`${QUIZ_API_URL}/quiz/assign`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${user.idToken}`,
+          },
+          body: JSON.stringify({
+            studentId: user.uid, // or user.id depending on your store
+            quizId: id,
+          }),
+        });
+
+        if (!assignRes.ok) {
+          const err = await assignRes.text();
+          throw new Error(err || "Failed to assign quiz");
+        }
+
+        // 2) Fetch quiz details
         const res = await fetch(`${QUIZ_API_URL}/quiz/${id}`, {
           headers: {
-            Authorization: `Bearer ${user?.idToken}`,
+            Authorization: `Bearer ${user.idToken}`,
           },
         });
+
         if (!res.ok) throw new Error(await res.text());
         const data = await res.json();
         setQuiz(data);
       } catch (e: any) {
+        console.error(e);
         Alert.alert("Error", e.message || "Could not load quiz");
-        router.back();
+        router.replace("/shalinda/(authed)/student/studentHome");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchQuiz();
-  }, [id]);
+    assignAndFetch();
+  }, [id, user]);
 
   if (loading) {
     return (
@@ -62,6 +84,14 @@ export default function StudentQuizScreen() {
     return (
       <SafeAreaView style={styles.center}>
         <Text>No quiz found</Text>
+        <TouchableOpacity
+          style={styles.btn}
+          onPress={() =>
+            router.replace("/shalinda/(authed)/student/studentHome")
+          }
+        >
+          <Text style={styles.btnText}>Back to Home</Text>
+        </TouchableOpacity>
       </SafeAreaView>
     );
   }
