@@ -112,6 +112,14 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
   const huntAppear = useRef<Animated.Value[]>([]).current;
   const huntShimmer = useRef(new Animated.Value(0)).current;
 
+  // Quiz 3: Word Puzzle (Scrambled Letters in AR)
+  const [puzzleVisible, setPuzzleVisible] = useState(false);
+  const [puzzleDone, setPuzzleDone] = useState(false);
+  const [puzzleTiles, setPuzzleTiles] = useState<Array<{ id: string; ch: string }>>([]);
+  const [puzzleSlots, setPuzzleSlots] = useState<Array<{ id: string; ch: string | null }>>([]);
+  const [puzzleCorrect, setPuzzleCorrect] = useState<boolean | null>(null);
+  const [puzzleFloating, setPuzzleFloating] = useState(new Animated.Value(0));
+
   const float1 = useRef(new Animated.Value(0)).current;
   const float2 = useRef(new Animated.Value(0)).current;
   const float3 = useRef(new Animated.Value(0)).current;
@@ -259,6 +267,87 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
       setTimeout(() => setHuntFlash(false), 1600);
     }
   }, [index, scanned, huntDone]);
+
+  // Open Word Puzzle after nine sentences (on entering index 9)
+  useEffect(() => {
+    if (!puzzleDone && index === 9) {
+      const letters = Array.from(scanned);
+      // build tiles in scrambled order (ensure different from original when possible)
+      const scrambled = [...letters];
+      for (let i = scrambled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [scrambled[i], scrambled[j]] = [scrambled[j], scrambled[i]];
+      }
+      if (scrambled.join('') === letters.join('') && letters.length > 1) {
+        // swap last two to differ from original
+        const n = scrambled.length;
+        [scrambled[n - 1], scrambled[n - 2]] = [scrambled[n - 2], scrambled[n - 1]];
+      }
+      setPuzzleTiles(scrambled.map((ch, i) => ({ id: `t${i}`, ch })));
+      setPuzzleSlots(letters.map((_, i) => ({ id: `s${i}`, ch: null })));
+      setPuzzleCorrect(null);
+      setPuzzleVisible(true);
+      // gentle float animation for the letter tray
+      try { puzzleFloating.setValue(0); } catch {}
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(puzzleFloating, { toValue: 1, duration: 1800, useNativeDriver: true }),
+          Animated.timing(puzzleFloating, { toValue: 0, duration: 1800, useNativeDriver: true }),
+        ])
+      ).start();
+    }
+  }, [index, scanned, puzzleDone, puzzleFloating]);
+
+  const onPuzzlePlace = useCallback((tileIdx: number) => {
+    // place tile into next empty slot
+    setPuzzleSlots((prev) => {
+      const next = prev.map((s) => ({ ...s }));
+      const emptyIndex = next.findIndex((s) => !s.ch);
+      if (emptyIndex >= 0) {
+        next[emptyIndex].ch = puzzleTiles[tileIdx].ch;
+      }
+      return next;
+    });
+    // remove tile from rack
+    setPuzzleTiles((prev) => prev.map((t, i) => (i === tileIdx ? { ...t, ch: '' } : t)));
+  }, [puzzleTiles]);
+
+  const onPuzzleRemove = useCallback((slotIdx: number) => {
+    setPuzzleSlots((prev) => {
+      const next = prev.map((s) => ({ ...s }));
+      const ch = next[slotIdx].ch;
+      next[slotIdx].ch = null;
+      // return ch to first empty tile position in rack
+      if (ch) {
+        setPuzzleTiles((pt) => {
+          const copy = pt.map((t) => ({ ...t }));
+          const empty = copy.findIndex((t) => !t.ch);
+          if (empty >= 0) copy[empty].ch = ch;
+          return copy;
+        });
+      }
+      return next;
+    });
+  }, []);
+
+  const onPuzzleReset = useCallback(() => {
+    setPuzzleCorrect(null);
+    const letters = Array.from(scanned);
+    const scrambled = [...letters];
+    for (let i = scrambled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [scrambled[i], scrambled[j]] = [scrambled[j], scrambled[i]];
+    }
+    setPuzzleTiles(scrambled.map((ch, i) => ({ id: `t${i}`, ch })));
+    setPuzzleSlots(letters.map((_, i) => ({ id: `s${i}`, ch: null })));
+  }, [scanned]);
+
+  const onPuzzleCheck = useCallback(async () => {
+    const attempt = (puzzleSlots.map((s) => s.ch || '')).join('');
+    const ok = attempt.toLowerCase() === scanned.toLowerCase();
+    setPuzzleCorrect(ok);
+    await playQuizChime(ok);
+  }, [puzzleSlots, scanned, playQuizChime]);
 
   // Animate chips appearing after flash
   useEffect(() => {
@@ -694,6 +783,68 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
         </View>
       </Modal>
 
+      {/* Word Puzzle (Scrambled Letters in AR) */}
+      <Modal visible={puzzleVisible} transparent animationType="fade" onRequestClose={() => {}}>
+        <View style={{ flex: 1 }}>
+          {/* AR background */}
+          <ARThreeOverlay query={word} />
+          {/* Floating overlay */}
+          <View style={styles.puzzleOverlay}>
+            <Text style={styles.quizTitle}>Word Puzzle</Text>
+            <Text style={styles.quizWord}>Arrange the letters to make the word</Text>
+            <Text style={[styles.quizWord, { color: '#1f1147' }]}>{' '}</Text>
+            <TouchableOpacity onPress={() => { setPuzzleVisible(false); setPuzzleDone(true); }} style={styles.skipLink}>
+              <Text style={styles.skipLinkText}>Skip this quiz</Text>
+            </TouchableOpacity>
+
+            {/* Slots row */}
+            <View style={styles.puzzleSlotsRow}>
+              {puzzleSlots.map((s, i) => (
+                <TouchableOpacity key={s.id} onPress={() => onPuzzleRemove(i)} style={[styles.slotCell, s.ch && styles.slotFilled]} activeOpacity={0.9}>
+                  <Text style={styles.slotText}>{s.ch || '_'}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Letter rack (floating) */}
+            <Animated.View style={[styles.puzzleRack, {
+              transform: [{ translateY: puzzleFloating.interpolate({ inputRange: [0,1], outputRange: [4, -4] }) }]
+            }]}>
+              {puzzleTiles.map((t, idx) => (
+                <TouchableOpacity key={t.id} disabled={!t.ch} onPress={() => onPuzzlePlace(idx)} style={[styles.tileCell, !t.ch && { opacity: 0.35 }]} activeOpacity={0.9}>
+                  <Text style={styles.tileText}>{t.ch || ''}</Text>
+                </TouchableOpacity>
+              ))}
+            </Animated.View>
+
+            {/* Controls */}
+            <View style={styles.puzzleButtonsRow}>
+              <TouchableOpacity onPress={onPuzzleReset} style={[styles.button, styles.secondary, { flex: 1, marginRight: 6 }]}>
+                <Text style={[styles.buttonText, { color: '#1f1147' }]}>Reset</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onPuzzleCheck} style={[styles.button, styles.primary, { flex: 1, marginLeft: 6 }]}>
+                <Text style={styles.buttonText}>Check</Text>
+              </TouchableOpacity>
+            </View>
+
+            {puzzleCorrect !== null && (
+              <View style={[styles.fbCard, puzzleCorrect ? styles.fbGood : styles.fbTry] }>
+                <ConfettiOverlay visible={!!puzzleCorrect} />
+                <Text style={styles.fbEmoji}>{puzzleCorrect ? '🌟' : '⭐'}</Text>
+                <Text style={styles.fbTitle}>{puzzleCorrect ? 'Well done!' : 'Nice try!'}</Text>
+                <Text style={styles.fbText}>{puzzleCorrect ? 'You solved the puzzle.' : 'Give it another go!'}</Text>
+                <TouchableOpacity
+                  style={[styles.button, styles.primary, styles.fbBtn]}
+                  onPress={() => { setPuzzleVisible(false); setPuzzleDone(true); }}
+                >
+                  <Text style={styles.buttonText}>Continue ▶</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       {/* Pronunciation Result Modal */}
       <Modal visible={evalVisible} transparent animationType="fade" onRequestClose={() => setEvalVisible(false)}>
         <View style={styles.evalOverlay}>
@@ -946,4 +1097,14 @@ const styles = StyleSheet.create({
   fbTitle: { fontSize: 18, fontWeight: '900', color: '#1f1147', marginTop: 6 },
   fbText: { color: '#374151', textAlign: 'center', marginTop: 6 },
   fbBtn: { marginTop: 10, alignSelf: 'stretch' },
+  // Puzzle styles
+  puzzleOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, padding: 16, justifyContent: 'flex-end' },
+  puzzleSlotsRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', marginTop: 8 },
+  slotCell: { width: 36, height: 44, borderRadius: 10, marginHorizontal: 4, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#e5e7eb' },
+  slotFilled: { backgroundColor: '#eef2ff', borderColor: '#c7d2fe' },
+  slotText: { fontSize: 22, fontWeight: '900', color: '#1f1147' },
+  puzzleRack: { marginTop: 14, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
+  tileCell: { width: 44, height: 52, borderRadius: 12, margin: 6, backgroundColor: '#e9d5ff', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, elevation: 3 },
+  tileText: { fontSize: 24, fontWeight: '900', color: '#1f1147' },
+  puzzleButtonsRow: { marginTop: 12, flexDirection: 'row', justifyContent: 'space-between' },
 });
