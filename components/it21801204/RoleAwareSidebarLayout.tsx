@@ -39,7 +39,7 @@ function itemsFor(role: "tutor" | "student" | undefined): SidebarItem[] {
       {
         key: "viewReport",
         label: "View Report",
-        href: "/shalinda/(authed)/tutor/viewReport",
+        href: "/shalinda/(authed)/tutor/viewReports",
         icon: "people-outline" as any,
       },
     ];
