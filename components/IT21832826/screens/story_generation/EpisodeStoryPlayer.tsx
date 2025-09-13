@@ -6,6 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Speech from "expo-speech";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, Animated, Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import ARThreeOverlay from "./ARThreeOverlay";
 
 // ---------- Types ----------
@@ -87,6 +88,10 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [evalVisible, setEvalVisible] = useState(false);
   const [evalResult, setEvalResult] = useState<any | null>(null);
+  const [count, setCount] = useState(0); // success counter (> 0.7)
+  const [countLoaded, setCountLoaded] = useState(false);
+
+  const COUNT_KEY = 'ARise:pronunciation_success_count';
 
   const float1 = useRef(new Animated.Value(0)).current;
   const float2 = useRef(new Animated.Value(0)).current;
@@ -111,6 +116,27 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
   const total = sentences.length;
   const scanned = (word ?? "").trim().replace(/^(["'])(.*)\1$/, "$2");
   const showSpeechControls = !!(current?.contains_word ?? (current?.text ?? "").toLowerCase().includes(scanned.toLowerCase()));
+
+  // Load persisted success count
+  useEffect(() => {
+    (async () => {
+      try {
+        const stored = await AsyncStorage.getItem(COUNT_KEY);
+        if (stored != null) {
+          const n = parseInt(stored, 10);
+          if (!Number.isNaN(n)) setCount(n);
+        }
+      } catch {}
+      setCountLoaded(true);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist success count whenever it changes
+  useEffect(() => {
+    if (!countLoaded) return;
+    AsyncStorage.setItem(COUNT_KEY, String(count)).catch(() => {});
+  }, [count, countLoaded]);
 
   // Load story
   useEffect(() => {
@@ -205,6 +231,12 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
         try {
           const result = await evaluatePronunciation(scanned, current?.text || '');
           setEvalResult(result || {});
+          // increment success counter if score > 0.7
+          const raw = (result?.pronunciation_score ?? result?.score ?? result?.data?.score) as any;
+          const score = Number(raw);
+          if (!Number.isNaN(score) && score > 0.7) {
+            setCount((c) => c + 1);
+          }
           setEvalVisible(true);
         } catch (e: any) {
           Alert.alert('Pronunciation', e?.message || 'Failed to evaluate');
