@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Alert, Platform, Animated, Easing } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Alert, Animated, Easing, Platform, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 type Props = {
   title?: string;
