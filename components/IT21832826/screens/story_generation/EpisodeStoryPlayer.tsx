@@ -294,6 +294,7 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
       }
       setPuzzleTiles(scrambled.map((ch, i) => ({ id: `t${i}`, ch })));
       setPuzzleSlots(letters.map((_, i) => ({ id: `s${i}`, ch: null })));
+      setSlotCenters(letters.map(() => ({ x: 0, y: 0 })));
       setPuzzleCorrect(null);
       setPuzzleVisible(true);
       // gentle float animation for the letter tray
@@ -886,7 +887,7 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
                         const d = Math.hypot(dx,dy);
                         if (d < bestD){ bestD=d; best=i; }
                       }
-                      if (best>=0 && bestD < 120){
+                      if (best>=0 && bestD < 160 && !(puzzleSlots[best]?.ch)){
                         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                         onPuzzlePlaceAt(idx, best);
                         return true;
@@ -1269,10 +1270,10 @@ const styles = StyleSheet.create({
   // Puzzle styles
   puzzleOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, padding: 16, justifyContent: 'center', alignItems: 'center' },
   puzzleSlotsRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', marginTop: 8 },
-  slotCell: { width: 52, height: 52, borderRadius: 26, marginHorizontal: 6, backgroundColor: 'rgba(255,255,255,0.8)', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#c7d2fe' },
+  slotCell: { width: 64, height: 64, borderRadius: 32, marginHorizontal: 8, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#c7d2fe' },
   slotFilled: { backgroundColor: '#eef2ff', borderColor: '#a78bfa' },
   slotText: { fontSize: 22, fontWeight: '900', color: '#1f1147' },
-  puzzleRack: { marginTop: 16, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
+  puzzleRack: { marginTop: 16, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', zIndex: 1 },
   tileCell: { width: 56, height: 56, borderRadius: 28, margin: 8, backgroundColor: 'rgba(233,213,255,0.95)', alignItems: 'center', justifyContent: 'center', shadowColor: '#8B5CF6', shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 },
   tileText: { fontSize: 24, fontWeight: '900', color: '#1f1147' },
   puzzleButtonsBottom: { position: 'absolute', left: 16, right: 16, bottom: 54, flexDirection: 'row', justifyContent: 'space-between' },
