@@ -6,7 +6,7 @@ import * as FileSystem from "expo-file-system";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Speech from "expo-speech";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Animated, Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Animated, Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View, Image } from "react-native";
 import ARThreeOverlay from "./ARThreeOverlay";
 
 // ---------- Types ----------
@@ -93,6 +93,13 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
 
   const COUNT_KEY = 'ARise:pronunciation_success_count';
 
+  // Quiz state (Word–Image Match)
+  const [quizVisible, setQuizVisible] = useState(false);
+  const [quizDone, setQuizDone] = useState(false);
+  const [quizCorrect, setQuizCorrect] = useState<boolean | null>(null);
+  const [quizSelection, setQuizSelection] = useState<string | null>(null);
+  const [quizOptions, setQuizOptions] = useState<Array<{ key: string; label: string; emoji: string; correct: boolean }>>([]);
+
   const float1 = useRef(new Animated.Value(0)).current;
   const float2 = useRef(new Animated.Value(0)).current;
   const float3 = useRef(new Animated.Value(0)).current;
@@ -137,6 +144,55 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
     if (!countLoaded) return;
     AsyncStorage.setItem(COUNT_KEY, String(count)).catch(() => {});
   }, [count, countLoaded]);
+
+  // -------------- Quiz logic --------------
+  function getEmojiForWord(w: string): string {
+    const s = (w || '').trim().toLowerCase();
+    const map: Record<string, string> = {
+      yacht: '⛵', boat: '⛵', ship: '🚢', car: '🚗', apple: '🍎', dog: '🐶', cat: '🐱', fish: '🐟', bird: '🐦', sun: '☀️', moon: '🌙', star: '⭐', rocket: '🚀', tree: '🌳', flower: '🌸', ball: '⚽', book: '📘'
+    };
+    return map[s] || '⭐';
+  }
+
+  function getImageUrlForQuery(query: string): string {
+    const q = encodeURIComponent(query);
+    return `https://source.unsplash.com/600x400/?${q}`;
+  }
+
+  function buildQuizOptions(target: string) {
+    const decoyQueries = ['car','apple','dog','cat','tree','flower','rocket','ball','sun','moon','book'];
+    // ensure decoys are different from target
+    const decoys: string[] = [];
+    for (let i = 0; i < decoyQueries.length && decoys.length < 2; i++) {
+      if (decoyQueries[i].toLowerCase() !== target.toLowerCase()) decoys.push(decoyQueries[i]);
+    }
+    const raw = [
+      { key: 'c', label: target, uri: getImageUrlForQuery(target), correct: true, fallbackEmoji: getEmojiForWord(target) },
+      { key: 'd1', label: decoys[0], uri: getImageUrlForQuery(decoys[0]), correct: false, fallbackEmoji: getEmojiForWord(decoys[0]) },
+      { key: 'd2', label: decoys[1], uri: getImageUrlForQuery(decoys[1]), correct: false, fallbackEmoji: getEmojiForWord(decoys[1]) },
+    ];
+    // shuffle
+    for (let i = raw.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [raw[i], raw[j]] = [raw[j], raw[i]];
+    }
+    return raw;
+  }
+
+  // Open quiz right after first three sentences (on entering index 3)
+  useEffect(() => {
+    if (!quizDone && index === 3) {
+      const opts = buildQuizOptions(scanned);
+      setQuizOptions(opts);
+      setQuizSelection(null);
+      setQuizCorrect(null);
+      setQuizVisible(true);
+      // Prefetch images to reduce blank states
+      try {
+        opts.forEach(o => { if (o?.uri) Image.prefetch(o.uri); });
+      } catch {}
+    }
+  }, [index, scanned, quizDone]);
 
   // Load story
   useEffect(() => {
@@ -193,6 +249,47 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
     return () => loops.forEach(l => l.stop());
   }, [starOpacities, stars]);
 
+  // Ensure playback is audible even in iOS silent mode
+  useEffect(() => {
+    (async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+      } catch {}
+    })();
+  }, []);
+
+  // Play a gentle chime for quiz feedback
+  const playQuizChime = useCallback(async (success: boolean) => {
+    try {
+      // Ensure playback works in silent mode
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, shouldDuckAndroid: true });
+      if (success) {
+        // Play a short musical-like flourish (staggered chimes)
+        const uri = 'https://assets.mixkit.co/sfx/preview/mixkit-quick-win-video-game-notification-269.wav';
+        const s1 = await Audio.Sound.createAsync({ uri }, { volume: 1.0 });
+        const s2 = await Audio.Sound.createAsync({ uri }, { volume: 0.9 });
+        const s3 = await Audio.Sound.createAsync({ uri }, { volume: 0.85 });
+        await s1.sound.playAsync();
+        setTimeout(() => { try { s2.sound.playAsync(); } catch {} }, 160);
+        setTimeout(() => { try { s3.sound.playAsync(); } catch {} }, 320);
+        setTimeout(() => { try { s1.sound.unloadAsync(); s2.sound.unloadAsync(); s3.sound.unloadAsync(); } catch {} }, 3000);
+      } else {
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: 'https://assets.mixkit.co/sfx/preview/mixkit-soft-pop-3564.wav' },
+          { shouldPlay: true, volume: 0.9 }
+        );
+        setTimeout(() => { try { sound.unloadAsync(); } catch {} }, 2000);
+      }
+    } catch {
+      // No speech fallback per request
+    }
+  }, []);
+
   const isARNode = true; // allow AR on all screens
 
   const onNext = useCallback(() => {
@@ -227,6 +324,8 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
         try { await rec.stopAndUnloadAsync(); } catch {}
         setRecording(null);
         setListening(false);
+        // restore playback-friendly audio mode
+        try { await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, shouldDuckAndroid: true }); } catch {}
         setEvaluating(true);
         try {
           const result = await evaluatePronunciation(scanned, current?.text || '');
@@ -377,6 +476,49 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
         </View>
       </Modal>
 
+      {/* Word–Image Match Quiz */}
+      <Modal visible={quizVisible} transparent animationType="fade" onRequestClose={() => {}}>
+        <View style={styles.quizOverlay}>
+          <View style={styles.quizCard}>
+            <Text style={styles.quizTitle}>Match the picture!</Text>
+            <Text style={styles.quizWord}>{scanned}</Text>
+            <View style={styles.quizRow}>
+              {quizOptions.map(opt => (
+                <QuizOption
+                  key={opt.key}
+                  imageUri={opt.uri}
+                  fallbackEmoji={opt.fallbackEmoji}
+                  selected={quizSelection === opt.key}
+                  onPress={async () => {
+                    if (quizSelection) return; // lock after one
+                    setQuizSelection(opt.key);
+                    const ok = !!opt.correct;
+                    setQuizCorrect(ok);
+                    await playQuizChime(ok);
+                  }}
+                />
+              ))}
+            </View>
+
+            {/* Feedback inside quiz */}
+            {quizCorrect !== null && (
+              <View style={[styles.fbCard, quizCorrect ? styles.fbGood : styles.fbTry] }>
+                <ConfettiOverlay visible={!!quizCorrect} />
+                <Text style={styles.fbEmoji}>{quizCorrect ? '🌟' : '⭐'}</Text>
+                <Text style={styles.fbTitle}>{quizCorrect ? 'Great job!' : 'Nice try!'}</Text>
+                <Text style={styles.fbText}>{quizCorrect ? 'You picked the right picture.' : 'That was a good try. Keep trying — you’ve got this!'}</Text>
+                <TouchableOpacity
+                  style={[styles.button, styles.primary, styles.fbBtn]}
+                  onPress={() => { setQuizVisible(false); setQuizDone(true); }}
+                >
+                  <Text style={styles.buttonText}>Continue ▶</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
       {/* Pronunciation Result Modal */}
       <Modal visible={evalVisible} transparent animationType="fade" onRequestClose={() => setEvalVisible(false)}>
         <View style={styles.evalOverlay}>
@@ -475,6 +617,74 @@ function MagicBurst() {
   );
 }
 
+// Confetti overlay for quiz success
+function ConfettiOverlay({ visible }: { visible: boolean }) {
+  const { width: W, height: H } = Dimensions.get('window');
+  const pieces = 24;
+  const anims = useRef(Array.from({ length: pieces }).map(() => new Animated.Value(0))).current;
+
+  useEffect(() => {
+    if (!visible) return;
+    const runs = anims.map((v, idx) => {
+      v.setValue(0);
+      const d = 1200 + Math.random() * 800;
+      const delay = Math.random() * 200;
+      return Animated.timing(v, { toValue: 1, duration: d, delay, useNativeDriver: true });
+    });
+    Animated.stagger(30, runs).start();
+  }, [visible, anims]);
+
+  if (!visible) return null;
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      {anims.map((v, i) => {
+        const startX = Math.random() * W;
+        const endY = H + 40;
+        const translateY = v.interpolate({ inputRange: [0, 1], outputRange: [-40, endY] });
+        const translateX = v.interpolate({ inputRange: [0, 1], outputRange: [startX, startX + (Math.random() * 120 - 60)] });
+        const rotate = v.interpolate({ inputRange: [0, 1], outputRange: ['0deg', `${Math.random() * 360}deg`] });
+        const size = 6 + Math.random() * 6;
+        const colors = ['#FDE68A', '#A78BFA', '#60A5FA', '#FCA5A5', '#34D399'];
+        const bg = colors[i % colors.length];
+        return (
+          <Animated.View key={`conf-${i}`} style={{ position: 'absolute', width: size, height: size, backgroundColor: bg, borderRadius: 2, transform: [{ translateX }, { translateY }, { rotate }] }} />
+        );
+      })}
+    </View>
+  );
+}
+
+// Small selectable quiz option (image card)
+function QuizOption({ imageUri, fallbackEmoji, selected, onPress }: { imageUri: string; fallbackEmoji?: string; selected: boolean; onPress: () => void }) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const [errored, setErrored] = useState(false);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    Animated.spring(scale, { toValue: selected ? 1.06 : 1, useNativeDriver: true, friction: 6, tension: 80 }).start();
+  }, [selected, scale]);
+  return (
+    <Animated.View style={[styles.quizOption, { transform: [{ scale }] }] }>
+      <TouchableOpacity onPress={onPress} style={styles.quizOptionBtn} activeOpacity={0.9}>
+        {!errored ? (
+          <Image
+            source={{ uri: imageUri }}
+            style={styles.quizOptionImg}
+            resizeMode="cover"
+            onLoadStart={() => setLoading(true)}
+            onLoadEnd={() => setLoading(false)}
+            onError={() => { setErrored(true); setLoading(false); }}
+          />
+        ) : (
+          <View style={[styles.quizOptionImg, { alignItems: 'center', justifyContent: 'center', backgroundColor: '#f5f3ff' }]}>
+            <Text style={{ fontSize: 42 }}>{fallbackEmoji || '⭐'}</Text>
+          </View>
+        )}
+        {loading && !errored ? (<View style={styles.quizLoading}><Text style={styles.quizLoadingText}>Loading…</Text></View>) : null}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
 // ---------- Styles ----------
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#0b0614" },
@@ -529,4 +739,23 @@ const styles = StyleSheet.create({
   listenEmoji: { fontSize: 48, marginVertical: 8 },
   listenWord: { fontSize: 22, fontWeight: '800', color: '#6d28d9' },
   listenHint: { marginTop: 8, color: '#6b7280' },
+
+  // Quiz styles
+  quizOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  quizCard: { width: '100%', maxWidth: 460, backgroundColor: '#ffffff', borderRadius: 24, padding: 20 },
+  quizTitle: { fontSize: 20, fontWeight: '900', color: '#1f1147', textAlign: 'center' },
+  quizWord: { fontSize: 22, fontWeight: '900', color: '#6d28d9', textAlign: 'center', marginTop: 6 },
+  quizRow: { marginTop: 16, flexDirection: 'row', justifyContent: 'space-between' },
+  quizOption: { flex: 1, marginHorizontal: 6 },
+  quizOptionBtn: { backgroundColor: '#f5f3ff', borderRadius: 18, overflow: 'hidden', height: 120 },
+  quizOptionImg: { width: '100%', height: '100%' },
+  quizLoading: { ...StyleSheet.absoluteFillObject as any, backgroundColor: 'rgba(255,255,255,0.8)', alignItems: 'center', justifyContent: 'center' },
+  quizLoadingText: { color: '#6b7280', fontWeight: '700' },
+  fbCard: { marginTop: 16, borderRadius: 20, padding: 16, alignItems: 'center' },
+  fbGood: { backgroundColor: '#ecfeff' },
+  fbTry: { backgroundColor: '#fff7ed' },
+  fbEmoji: { fontSize: 36 },
+  fbTitle: { fontSize: 18, fontWeight: '900', color: '#1f1147', marginTop: 6 },
+  fbText: { color: '#374151', textAlign: 'center', marginTop: 6 },
+  fbBtn: { marginTop: 10, alignSelf: 'stretch' },
 });
