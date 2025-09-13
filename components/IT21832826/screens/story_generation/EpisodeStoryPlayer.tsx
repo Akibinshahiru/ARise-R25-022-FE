@@ -125,7 +125,7 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
   const puzzleContainerRef = useRef<View>(null);
   const [puzzleContainerOffset, setPuzzleContainerOffset] = useState<{x:number,y:number}>({x:0,y:0});
   const slotRefs = useRef<Array<View | null>>([]);
-  const [slotCenters, setSlotCenters] = useState<Array<{x:number,y:number}>>([]);
+  const [slotCenters, setSlotCenters] = useState<Array<{x:number,y:number}>>([]); // local-to-container coords
   const tiltX = useRef(new Animated.Value(0)).current;
   const tiltY = useRef(new Animated.Value(0)).current;
 
@@ -827,6 +827,12 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
           </ARBubblesOverlay>
           {/* Floating overlay */}
           <View style={styles.puzzleOverlay}>
+            {/* Artistic header at top */}
+            <View style={styles.puzzleHeader}>
+              <Text style={styles.puzzleTitle}>Word Puzzle</Text>
+              <Text style={styles.puzzleSubtitle}>Arrange the letters to make the word</Text>
+              <View style={styles.puzzleDecor} />
+            </View>
             <Text style={styles.quizTitle}>Word Puzzle</Text>
             <Text style={styles.quizWord}>Arrange the letters to make the word</Text>
             <Text style={[styles.quizWord, { color: '#1f1147' }]}>{' '}</Text>
@@ -844,7 +850,7 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
                       (slotRefs.current[i] as any)?.measureInWindow?.((x:number,y:number,w:number,h:number) => {
                         setSlotCenters((prev) => {
                           const next = [...prev];
-                          next[i] = { x: x + w/2, y: y + h/2 };
+                          next[i] = { x: (x - puzzleContainerOffset.x) + w/2, y: (y - puzzleContainerOffset.y) + h/2 };
                           return next;
                         });
                       });
@@ -879,11 +885,13 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
                     viewportH={H}
                     onDrop={async (pageX, pageY) => {
                       // find nearest slot center
+                      const localX = pageX - puzzleContainerOffset.x;
+                      const localY = pageY - puzzleContainerOffset.y;
                       let best=-1, bestD=1e9;
                       for (let i=0;i<slotCenters.length;i++){
                         const c = slotCenters[i];
                         if(!c) continue;
-                        const dx = c.x - pageX, dy = c.y - pageY;
+                        const dx = c.x - localX, dy = c.y - localY;
                         const d = Math.hypot(dx,dy);
                         if (d < bestD){ bestD=d; best=i; }
                       }
@@ -897,9 +905,7 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
                       }
                     }}
                   />
-                ) : (
-                  <View key={`empty-${idx}`} style={[styles.tileCell, { opacity: 0.25 }]} />
-                )
+                ) : null
               ))}
             </Animated.View>
 
@@ -928,14 +934,8 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
               </View>
             )}
             <View style={styles.skipBottomRow}>
-              <TouchableOpacity onPress={onSkipCurrentImageQuiz}>
-                <Text style={styles.skipLinkText}>Skip this quiz</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.skipBottomRow}>
-              <TouchableOpacity onPress={() => { setPuzzleVisible(false); setPuzzleDone(true); }}>
-                <Text style={styles.skipLinkText}>Skip this quiz</Text>
+              <TouchableOpacity onPress={() => { setPuzzleVisible(false); setPuzzleDone(true); }} style={styles.skipBtn}>
+                <Text style={styles.skipBtnText}>Skip this quiz</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1115,6 +1115,7 @@ function DraggableBubble({ label, onDrop, tiltX, tiltY, viewportW = 360, viewpor
   const baseY = useRef(new Animated.Value(base.y)).current;
   const pos = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
   const vanish = useRef(new Animated.Value(1)).current;
+  const scale = useRef(new Animated.Value(1)).current;
   const [isDragging, setIsDragging] = useState(false);
   const floatAnimation = useRef({
     x: new Animated.Value(0),
@@ -1151,15 +1152,25 @@ function DraggableBubble({ label, onDrop, tiltX, tiltY, viewportW = 360, viewpor
   }, [isDragging, floatAnimation, baseX, baseY, viewportW, viewportH]);
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
-    onPanResponderGrant: () => { setIsDragging(true); Haptics.selectionAsync(); },
+    onPanResponderGrant: () => { 
+      setIsDragging(true); 
+      Haptics.selectionAsync(); 
+      Animated.spring(scale, { toValue: 1.15, useNativeDriver: true, friction: 5, tension: 120 }).start();
+    },
     onPanResponderMove: Animated.event([null, { dx: pos.x, dy: pos.y }], { useNativeDriver: false }),
     onPanResponderRelease: async (e, gesture) => {
       const ok = await onDrop(e.nativeEvent.pageX, e.nativeEvent.pageY);
       if (!ok) {
-        Animated.spring(pos, { toValue: { x: 0, y: 0 }, useNativeDriver: true }).start(() => setIsDragging(false));
+        Animated.parallel([
+          Animated.spring(pos, { toValue: { x: 0, y: 0 }, useNativeDriver: true }),
+          Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6, tension: 140 }),
+        ]).start(() => setIsDragging(false));
       } else {
-        // gracefully vanish to imply snap-in
-        Animated.timing(vanish, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => setIsDragging(false));
+        // bubble pop then vanish
+        Animated.sequence([
+          Animated.spring(scale, { toValue: 1.25, useNativeDriver: true, friction: 5, tension: 120 }),
+          Animated.timing(vanish, { toValue: 0, duration: 180, useNativeDriver: true }),
+        ]).start(() => setIsDragging(false));
       }
     },
   })).current;
@@ -1168,10 +1179,11 @@ function DraggableBubble({ label, onDrop, tiltX, tiltY, viewportW = 360, viewpor
       {...panResponder.panHandlers}
       style={{ margin: 8, opacity: vanish, transform: [ 
         { translateX: Animated.add(Animated.add(baseX, Animated.add(floatAnimation.x, pos.x)), (isDragging ? new Animated.Value(0) : (tiltX || new Animated.Value(0)))) }, 
-        { translateY: Animated.add(Animated.add(baseY, Animated.add(floatAnimation.y, pos.y)), (isDragging ? new Animated.Value(0) : (tiltY || new Animated.Value(0)))) } 
+        { translateY: Animated.add(Animated.add(baseY, Animated.add(floatAnimation.y, pos.y)), (isDragging ? new Animated.Value(0) : (tiltY || new Animated.Value(0)))) },
+        { scale }
       ] }}
     >
-      <View style={styles.tileCell}>
+      <View style={[styles.tileCell, isDragging && { shadowOpacity: 0.6, shadowRadius: 10, elevation: 6 }]}>
         <Text style={styles.tileText}>{label}</Text>
       </View>
     </Animated.View>
@@ -1248,6 +1260,8 @@ const styles = StyleSheet.create({
   quizLoadingText: { color: '#6b7280', fontWeight: '700' },
   skipLink: { alignSelf: 'flex-end', marginTop: 8 },
   skipLinkText: { color: '#6d28d9', fontWeight: '800' },
+  skipBtn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999, borderWidth: 2, borderColor: '#c4b5fd', backgroundColor: '#f5f3ff' },
+  skipBtnText: { color: '#4c1d95', fontWeight: '900' },
   huntGrid: { marginTop: 16, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   chip: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, backgroundColor: '#f5f3ff', marginBottom: 12, marginRight: 8, borderWidth: 2, borderColor: '#e9d5ff' },
   chipText: { color: '#1f1147', fontWeight: '900', fontSize: 18 },
@@ -1269,7 +1283,11 @@ const styles = StyleSheet.create({
   fbBtn: { marginTop: 10, alignSelf: 'stretch' },
   // Puzzle styles
   puzzleOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, padding: 16, justifyContent: 'center', alignItems: 'center' },
-  puzzleSlotsRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', marginTop: 8 },
+  puzzleHeader: { position: 'absolute', top: 24, left: 16, right: 16, alignItems: 'center' },
+  puzzleTitle: { fontSize: 28, fontWeight: '900', color: '#4c1d95', fontFamily: 'OpenDyslexic' },
+  puzzleSubtitle: { marginTop: 4, fontSize: 15, color: '#6b7280', fontFamily: 'OpenDyslexic' },
+  puzzleDecor: { marginTop: 8, width: 120, height: 6, borderRadius: 3, backgroundColor: '#e9d5ff' },
+  puzzleSlotsRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'nowrap', marginTop: 8 },
   slotCell: { width: 64, height: 64, borderRadius: 32, marginHorizontal: 8, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#c7d2fe' },
   slotFilled: { backgroundColor: '#eef2ff', borderColor: '#a78bfa' },
   slotText: { fontSize: 22, fontWeight: '900', color: '#1f1147' },
