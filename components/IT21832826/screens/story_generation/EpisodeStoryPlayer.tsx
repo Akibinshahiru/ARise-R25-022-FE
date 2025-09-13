@@ -107,6 +107,10 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
   const [huntCorrect, setHuntCorrect] = useState<boolean | null>(null);
   const [huntSelection, setHuntSelection] = useState<string | null>(null);
   const [huntOptions, setHuntOptions] = useState<Array<{ key: string; word: string; correct: boolean }>>([]);
+  const [huntFlash, setHuntFlash] = useState(false);
+  const flashAnim = useRef(new Animated.Value(0)).current;
+  const huntAppear = useRef<Animated.Value[]>([]).current;
+  const huntShimmer = useRef(new Animated.Value(0)).current;
 
   const float1 = useRef(new Animated.Value(0)).current;
   const float2 = useRef(new Animated.Value(0)).current;
@@ -240,7 +244,7 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
     }
   }, [index, scanned, quizDone]);
 
-  // Open Word Hunt after six sentences (on entering index 6)
+  // Open Flash Quiz after six sentences (on entering index 6)
   useEffect(() => {
     if (!huntDone && index === 6) {
       const opts = buildHuntOptions(scanned);
@@ -248,8 +252,29 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
       setHuntSelection(null);
       setHuntCorrect(null);
       setHuntVisible(true);
+      // Start flash phase (show the word for ~1.6s)
+      setHuntFlash(true);
+      try { flashAnim.setValue(0); } catch {}
+      Animated.timing(flashAnim, { toValue: 1, duration: 1600, useNativeDriver: false }).start();
+      setTimeout(() => setHuntFlash(false), 1600);
     }
   }, [index, scanned, huntDone]);
+
+  // Animate chips appearing after flash
+  useEffect(() => {
+    if (huntVisible && !huntFlash && huntOptions.length > 0) {
+      // init
+      huntAppear.length = 0;
+      for (let i = 0; i < huntOptions.length; i++) huntAppear.push(new Animated.Value(0));
+      const anims = huntAppear.map((v, i) => Animated.spring(v, { toValue: 1, useNativeDriver: true, friction: 7, tension: 90 }));
+      Animated.stagger(60, anims).start();
+      // shimmer under prompt
+      huntShimmer.setValue(0);
+      Animated.loop(
+        Animated.timing(huntShimmer, { toValue: 1, duration: 1400, useNativeDriver: true })
+      ).start();
+    }
+  }, [huntVisible, huntFlash, huntOptions, huntAppear, huntShimmer]);
 
   const onSkipCurrentImageQuiz = useCallback(() => {
     setQuizVisible(false);
@@ -589,48 +614,81 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
         </View>
       </Modal>
 
-      {/* Word Hunt Quiz */}
+      {/* Flash Quiz (Quick Recognition) */}
       <Modal visible={huntVisible} transparent animationType="fade" onRequestClose={() => {}}>
         <View style={styles.quizOverlay}>
           <View style={styles.quizCard}>
-            <Text style={styles.quizTitle}>Spot the Word!</Text>
-            <Text style={styles.quizWord}>Find “{scanned}”</Text>
-            <TouchableOpacity onPress={onSkipCurrentHuntQuiz} style={styles.skipLink}>
-              <Text style={styles.skipLinkText}>Skip this quiz</Text>
-            </TouchableOpacity>
-
-            <View style={styles.huntGrid}>
-              {huntOptions.map(opt => (
-                <TouchableOpacity
-                  key={opt.key}
-                  onPress={async () => {
-                    if (huntSelection) return;
-                    setHuntSelection(opt.key);
-                    const ok = !!opt.correct;
-                    setHuntCorrect(ok);
-                    await playQuizChime(ok);
-                  }}
-                  style={[styles.chip, huntSelection === opt.key && (opt.correct ? styles.chipGood : styles.chipBad)]}
-                  activeOpacity={0.9}
-                >
-                  <Text style={styles.chipText}>{opt.word}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {huntCorrect !== null && (
-              <View style={[styles.fbCard, huntCorrect ? styles.fbGood : styles.fbTry] }>
-                <ConfettiOverlay visible={!!huntCorrect} />
-                <Text style={styles.fbEmoji}>{huntCorrect ? '🌟' : '⭐'}</Text>
-                <Text style={styles.fbTitle}>{huntCorrect ? 'You found it!' : 'Nice try!'}</Text>
-                <Text style={styles.fbText}>{huntCorrect ? 'Great spotting.' : 'Keep trying — you’ll get it!'}</Text>
-                <TouchableOpacity
-                  style={[styles.button, styles.primary, styles.fbBtn]}
-                  onPress={() => { setHuntVisible(false); setHuntDone(true); }}
-                >
-                  <Text style={styles.buttonText}>Continue ▶</Text>
+            <Text style={styles.quizTitle}>Flash Quiz</Text>
+            {huntFlash ? (
+              <View style={styles.flashPhaseWrap}>
+                <Animated.Text style={[styles.flashWord, {
+                  transform: [{ scale: flashAnim.interpolate({ inputRange: [0,1], outputRange: [0.9, 1.04] }) }],
+                  opacity: flashAnim.interpolate({ inputRange: [0,1], outputRange: [0.95, 1] })
+                }]}>{scanned}</Animated.Text>
+                <View style={styles.flashBarWrap}>
+                  <Animated.View style={[styles.flashBarFill, { width: flashAnim.interpolate({ inputRange: [0,1], outputRange: ['0%','100%'] }) }]} />
+                </View>
+                <TouchableOpacity onPress={onSkipCurrentHuntQuiz} style={styles.skipLink}>
+                  <Text style={styles.skipLinkText}>Skip this quiz</Text>
                 </TouchableOpacity>
               </View>
+            ) : (
+              <>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={styles.quizWord}>Which word did you see?</Text>
+                  <View style={styles.shimmerWrap}>
+                    <Animated.View
+                      style={[styles.shimmerBar, {
+                        transform: [{ translateX: huntShimmer.interpolate({ inputRange: [0,1], outputRange: [-40, 140] }) }],
+                        opacity: 0.6,
+                      }]}
+                    />
+                  </View>
+                </View>
+                <TouchableOpacity onPress={onSkipCurrentHuntQuiz} style={styles.skipLink}>
+                  <Text style={styles.skipLinkText}>Skip this quiz</Text>
+                </TouchableOpacity>
+                <View style={styles.huntGrid}>
+                  {huntOptions.map((opt, idx) => (
+                    <Animated.View key={opt.key} style={{
+                      transform: [
+                        { scale: (huntAppear[idx] || new Animated.Value(1)).interpolate({ inputRange: [0,1], outputRange: [0.85, 1] }) },
+                        { translateY: (huntAppear[idx] || new Animated.Value(1)).interpolate({ inputRange: [0,1], outputRange: [8, 0] }) },
+                      ],
+                      opacity: (huntAppear[idx] || new Animated.Value(1))
+                    }}>
+                      <TouchableOpacity
+                        onPress={async () => {
+                          if (huntSelection) return;
+                          setHuntSelection(opt.key);
+                          const ok = !!opt.correct;
+                          setHuntCorrect(ok);
+                          await playQuizChime(ok);
+                        }}
+                        style={[styles.chip, huntSelection === opt.key && (opt.correct ? styles.chipGood : styles.chipBad)]}
+                        activeOpacity={0.9}
+                      >
+                        <Text style={styles.chipText}>{opt.word}</Text>
+                      </TouchableOpacity>
+                    </Animated.View>
+                  ))}
+                </View>
+
+                {huntCorrect !== null && (
+                  <View style={[styles.fbCard, huntCorrect ? styles.fbGood : styles.fbTry] }>
+                    <ConfettiOverlay visible={!!huntCorrect} />
+                    <Text style={styles.fbEmoji}>{huntCorrect ? '🌟' : '⭐'}</Text>
+                    <Text style={styles.fbTitle}>{huntCorrect ? 'You got it!' : 'Nice try!'}</Text>
+                    <Text style={styles.fbText}>{huntCorrect ? 'Great memory!' : 'Keep trying — you’ll get it!'}</Text>
+                    <TouchableOpacity
+                      style={[styles.button, styles.primary, styles.fbBtn]}
+                      onPress={() => { setHuntVisible(false); setHuntDone(true); }}
+                    >
+                      <Text style={styles.buttonText}>Continue ▶</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </>
             )}
           </View>
         </View>
@@ -822,7 +880,7 @@ const styles = StyleSheet.create({
   button: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12 },
   primary: { backgroundColor: "#6d28d9" },
   secondary: { backgroundColor: "#e9d5ff" },
-  buttonText: { color: "#fff", fontWeight: "800" },
+  buttonText: { color: "#fff", fontWeight: "800", textAlign: 'center' },
   arOverlayControls: { position: 'absolute', bottom: 24, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between' },
   star: { position: 'absolute', backgroundColor: '#ffffff', borderRadius: 2, opacity: 0.6 },
 
@@ -875,6 +933,12 @@ const styles = StyleSheet.create({
   chipText: { color: '#1f1147', fontWeight: '900', fontSize: 18 },
   chipGood: { backgroundColor: '#ecfeff', borderColor: '#a7f3d0' },
   chipBad: { backgroundColor: '#fff7ed', borderColor: '#fecaca' },
+  flashPhaseWrap: { marginTop: 16, alignItems: 'center' },
+  flashWord: { fontSize: 42, fontWeight: '900', color: '#1f1147', letterSpacing: 1 },
+  flashBarWrap: { marginTop: 12, width: '100%', height: 8, backgroundColor: '#F3F4F6', borderRadius: 6, overflow: 'hidden' },
+  flashBarFill: { height: '100%', backgroundColor: '#8B5CF6' },
+  shimmerWrap: { marginTop: 4, width: 180, height: 6, backgroundColor: '#ede9fe', borderRadius: 3, overflow: 'hidden' },
+  shimmerBar: { width: 40, height: '100%', backgroundColor: '#c4b5fd', borderRadius: 3 },
   fbCard: { marginTop: 16, borderRadius: 20, padding: 16, alignItems: 'center' },
   fbGood: { backgroundColor: '#ecfeff' },
   fbTry: { backgroundColor: '#fff7ed' },
