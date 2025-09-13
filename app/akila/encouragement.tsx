@@ -58,7 +58,7 @@ export default function EncouragementPage() {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 },
-  card: { backgroundColor: '#ffffff', borderRadius: 24, padding: 20, shadowColor: '#8B5CF6', shadowRadius: 16, width: '100%', maxWidth: 460, alignItems: 'center' },
+  card: { backgroundColor: 'transparent', borderRadius: 24, padding: 20, shadowColor: '#8B5CF6', shadowRadius: 16, width: '100%', maxWidth: 460, alignItems: 'center' },
   emoji: { fontSize: 40, marginBottom: 8 },
   title: { fontFamily: 'OpenDyslexic', fontSize: 32, fontWeight: '900', color: '#1f2937' },
   body: { fontFamily: 'OpenDyslexic', marginTop: 10, fontSize: 18, color: '#374151' },
