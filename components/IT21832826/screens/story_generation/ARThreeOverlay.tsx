@@ -1,303 +1,295 @@
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import { GLView } from 'expo-gl';
-import { Renderer } from 'expo-three';
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import * as THREE from 'three';
-import { DRACOLoader, GLTFLoader } from 'three-stdlib';
+import { Asset } from "expo-asset";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import { GLView } from "expo-gl";
+import { Renderer } from "expo-three";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
+import * as THREE from "three";
+import { Object3D, PerspectiveCamera } from "three";
+import { DRACOLoader, GLTFLoader } from "three-stdlib";
 
-/** Curated, CORS-friendly free GLB sources (no auth, direct links) */
-const FREE_MODELS: Array<{ name: string; url: string; keywords?: string[] }> = [
-  // Three.js examples CDN
-  { name: 'Parrot', url: 'https://threejs.org/examples/models/gltf/Parrot.glb', keywords: ['bird', 'parrot', 'animal'] },
+type Props = { query?: string };
 
-  // Khronos glTF Sample Models
-  { name: 'Damaged Helmet', url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/DamagedHelmet/glTF-Binary/DamagedHelmet.glb', keywords: ['helmet'] },
-  { name: 'BoomBox', url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoomBox/glTF-Binary/BoomBox.glb', keywords: ['radio', 'speaker', 'music', 'boombox'] },
-  { name: 'Water Bottle', url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/WaterBottle/glTF-Binary/WaterBottle.glb', keywords: ['bottle', 'water'] },
-  { name: 'Duck', url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb', keywords: ['duck', 'bird', 'animal'] },
-  { name: 'Cesium Milk Truck', url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMilkTruck/glTF-Binary/CesiumMilkTruck.glb', keywords: ['truck', 'vehicle', 'car'] },
-  { name: 'Fox', url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Fox/glTF-Binary/Fox.glb', keywords: ['fox', 'animal'] },
-  { name: 'Horse', url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Horse/glTF-Binary/Horse.glb', keywords: ['horse', 'animal'] },
+// 1) Local bundled yacht model (ensure this path exists)
+const LOCAL_MODELS: Record<string, number> = {
+  yacht: require("../../../../assets/IT21832826/models/yacht.glb"),
+  boat: require("../../../../assets/IT21832826/models/yacht.glb"),
+};
+
+// 2) Optional remote fallbacks
+const FREE_MODELS = [
+  { name: "Parrot", url: "https://threejs.org/examples/models/gltf/Parrot.glb", keywords: ["parrot", "bird"] },
+  { name: "Duck", url: "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF-Binary/Duck.glb", keywords: ["duck"] },
 ];
 
-// Simple fuzzy match over curated sources
 function findFreeModel(query: string) {
-  const q = (query || '').toLowerCase().trim();
+  const q = (query || "").toLowerCase().trim();
   if (!q) return null;
   return (
-    FREE_MODELS.find(m => m.name.toLowerCase().includes(q)) ||
-    FREE_MODELS.find(m => (m.keywords || []).some(k => k.toLowerCase().includes(q))) ||
+    FREE_MODELS.find((m) => m.name.toLowerCase().includes(q)) ||
+    FREE_MODELS.find((m) => (m.keywords || []).some((k) => q.includes(k))) ||
     null
   );
 }
 
-type Props = { query?: string };
-
-export default function ARThreeOverlay({ query = 'Duck' }: Props) {
+export default function ARThreeOverlay({ query = "yacht" }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
-  const [debug, setDebug] = useState<string>('Initializing…');
+  const [debug, setDebug] = useState("Initializing…");
   const [modelLoaded, setModelLoaded] = useState(false);
+
+  const glRef = useRef<any>(null);
+  const cameraRef = useRef<typeof PerspectiveCamera | null>(null); // ✅ inline type
+  const rendererRef = useRef<Renderer | null>(null);
 
   useEffect(() => {
     if (!permission?.granted) requestPermission();
   }, [permission?.granted]);
 
-  const createFallbackYacht = () => {
+  const createFallbackYacht = useCallback(() => {
     const group = new THREE.Group();
 
-    // Hull
-    const hullGeometry = new THREE.CylinderGeometry(0.15, 0.35, 2.5, 12);
-    const hullMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      metalness: 0.3,
-      roughness: 0.7,
-    });
-    const hull = new THREE.Mesh(hullGeometry, hullMaterial);
+    const hull = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.15, 0.35, 2.5, 12),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.3, roughness: 0.7 })
+    );
     hull.rotation.z = Math.PI / 2;
     hull.position.y = -0.2;
 
-    // Deck
-    const deckGeometry = new THREE.CylinderGeometry(0.25, 0.3, 2.2, 12);
-    const deckMaterial = new THREE.MeshStandardMaterial({
-      color: 0xf4f1e8,
-      metalness: 0.1,
-      roughness: 0.9,
-    });
-    const deck = new THREE.Mesh(deckGeometry, deckMaterial);
+    const deck = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.25, 0.3, 2.2, 12),
+      new THREE.MeshStandardMaterial({ color: 0xf4f1e8, metalness: 0.1, roughness: 0.9 })
+    );
     deck.rotation.z = Math.PI / 2;
     deck.position.y = 0.05;
     deck.scale.y = 0.8;
 
-    // Mast
-    const mastGeometry = new THREE.CylinderGeometry(0.03, 0.03, 2);
-    const mastMaterial = new THREE.MeshStandardMaterial({
-      color: 0x8b4513,
-      metalness: 0.1,
-      roughness: 0.9,
-    });
-    const mast = new THREE.Mesh(mastGeometry, mastMaterial);
+    const mast = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.03, 0.03, 2),
+      new THREE.MeshStandardMaterial({ color: 0x8b4513, metalness: 0.1, roughness: 0.9 })
+    );
     mast.position.set(0, 1.2, 0);
 
-    // Main sail
-    const sailGeometry = new THREE.PlaneGeometry(1.2, 1.5);
-    const sailMaterial = new THREE.MeshStandardMaterial({
+    const sailMat = new THREE.MeshStandardMaterial({
       color: 0xf8f8ff,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.9,
-      metalness: 0,
-      roughness: 0.8,
+      opacity: 0.92,
+      roughness: 0.85,
     });
-    const sail = new THREE.Mesh(sailGeometry, sailMaterial);
+    const sail = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.5), sailMat);
     sail.position.set(0.4, 1.2, 0);
 
-    // Jib
-    const jibGeometry = new THREE.PlaneGeometry(0.8, 1);
-    const jib = new THREE.Mesh(jibGeometry, sailMaterial);
+    const jib = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 1), sailMat);
     jib.position.set(-0.3, 0.8, 0);
     jib.rotation.y = Math.PI * 0.1;
 
-    // Cabin
-    const cabinGeometry = new THREE.BoxGeometry(0.8, 0.4, 1.2);
-    const cabinMaterial = new THREE.MeshStandardMaterial({
-      color: 0xe6e6fa,
-      metalness: 0.1,
-      roughness: 0.8,
-    });
-    const cabin = new THREE.Mesh(cabinGeometry, cabinMaterial);
+    const cabin = new THREE.Mesh(
+      new THREE.BoxGeometry(0.8, 0.4, 1.2),
+      new THREE.MeshStandardMaterial({ color: 0xe6e6fa, metalness: 0.1, roughness: 0.8 })
+    );
     cabin.position.set(0.3, 0.4, 0);
 
     group.add(hull, deck, mast, sail, jib, cabin);
     return group;
-  };
+  }, []);
+
+  // ✅ Avoid `GLTFLoader` as a type; just use runtime value & inline return type
+  async function loadLocalGLB(loader: any, moduleId: number): Promise<typeof Object3D> {
+    const asset = Asset.fromModule(moduleId);
+    if (!asset.localUri) await asset.downloadAsync();
+    const uri = asset.localUri || asset.uri;
+    if (!uri) throw new Error("Local asset URI missing");
+
+    try {
+      const base = uri.replace(/\/[^\/]*$/, "/");
+      loader.setResourcePath(base);
+    } catch {}
+
+    return await new Promise((resolve, reject) => {
+      loader.load(
+        uri,
+        (gltf: any) => {
+          const root: typeof Object3D | undefined = gltf.scene || gltf.scenes?.[0];
+          if (!root) return reject(new Error("No scene in GLB"));
+          resolve(root);
+        },
+        undefined,
+        (err: any) => reject(err)
+      );
+    });
+  }
+
+  async function loadRemoteGLB(loader: any, url: string): Promise<typeof Object3D> {
+    const draco = new DRACOLoader();
+    draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.6/");
+    draco.setDecoderConfig({ type: "js" });
+    loader.setDRACOLoader(draco);
+
+    const base = url.replace(/\/[^\/]*$/, "/");
+    loader.setResourcePath(base);
+
+    return await new Promise((resolve, reject) => {
+      loader.load(
+        url,
+        (gltf: any) => {
+          const root: typeof Object3D | undefined = gltf.scene || gltf.scenes?.[0];
+          if (!root) return reject(new Error("No scene in GLB"));
+          resolve(root);
+        },
+        undefined,
+        (err: any) => reject(err)
+      );
+    });
+  }
 
   const onContextCreate = async (gl: any) => {
-    const { drawingBufferWidth: width, drawingBufferHeight: height } = gl;
+    glRef.current = gl;
+    const width = gl.drawingBufferWidth;
+    const height = gl.drawingBufferHeight;
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(60, width / height, 0.01, 100);
     camera.position.set(0, 0, 3);
+    cameraRef.current = camera;
 
     const renderer = new Renderer({ gl, alpha: true });
+    rendererRef.current = renderer;
     renderer.setSize(width, height);
     renderer.setClearColor(0x000000, 0);
 
-    // ---- Color & pipeline tweaks
     try {
       (THREE as any).ColorManagement && ((THREE as any).ColorManagement.enabled = true);
-    } catch {}
-    try {
-      (renderer as any).outputColorSpace = (THREE as any).SRGBColorSpace || 'srgb';
+      (renderer as any).outputColorSpace = (THREE as any).SRGBColorSpace || "srgb";
     } catch {}
 
-    // ---- Patch pixelStorei to silence EXGL unsupported pname warnings
-    const ctx: WebGLRenderingContext = (renderer as any).getContext
-      ? (renderer as any).getContext()
-      : (gl as any);
-
-    const originalPixelStorei = (ctx as any).pixelStorei?.bind(ctx);
-    if (originalPixelStorei) {
+    // Silence EXGL unsupported pnames
+    const ctx: WebGLRenderingContext = (renderer as any).getContext?.() || gl;
+    const orig = (ctx as any).pixelStorei?.bind(ctx);
+    if (orig) {
       (ctx as any).pixelStorei = (pname: number, param: any) => {
-        try {
-          originalPixelStorei(pname, param);
-        } catch {
-          // Ignore unsupported pname (e.g., UNPACK_COLORSPACE_CONVERSION_WEBGL)
-          // console.warn('pixelStorei unsupported pname:', pname);
-        }
+        try { orig(pname, param); } catch {}
       };
     }
 
-    // ---- Lighting
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 2.5);
-    directionalLight.position.set(3, 4, 2);
-    scene.add(directionalLight);
-
-    const ambientLight = new THREE.AmbientLight(0x404040, 1.8);
-    scene.add(ambientLight);
-
-    const fillLight = new THREE.DirectionalLight(0x6495ed, 1);
-    fillLight.position.set(-2, 1, -1);
-    scene.add(fillLight);
+    // Lights
+    scene.add(new THREE.AmbientLight(0xffffff, 1.4));
+    const dir = new THREE.DirectionalLight(0xffffff, 2.2);
+    dir.position.set(3, 4, 2); scene.add(dir);
+    const fill = new THREE.DirectionalLight(0x9bbcff, 0.8);
+    fill.position.set(-2, 1, -1); scene.add(fill);
 
     const group = new THREE.Group();
     scene.add(group);
 
-    // ---- Load model from curated free sources (or fallback)
+    // Load model
     try {
-      const match = findFreeModel(query);
-      if (!match) {
-        setDebug('No curated free model matched. Using fallback yacht.');
-        group.add(createFallbackYacht());
+      const q = (query || "").toLowerCase();
+      const loader = new GLTFLoader();
+      (loader as any).ktx2Loader = undefined;
+
+      if (LOCAL_MODELS.yacht && (q.includes("yacht") || q.includes("boat") || q.includes("ship"))) {
+        setDebug("Loading local yacht model…");
+        const root = await loadLocalGLB(loader, LOCAL_MODELS.yacht);
+        postProcess(root);
+        group.add(root);
+        setDebug("Local yacht loaded ✅");
         setModelLoaded(true);
       } else {
-        setDebug(`Loading free model: ${match.name} …`);
-        const loader = new GLTFLoader();
-
-        // Disable KTX2/Basis if present in three-stdlib env
-        (loader as any).ktx2Loader = undefined;
-
-        // Optional DRACO for compressed assets
-        const draco = new DRACOLoader();
-        draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
-        draco.setDecoderConfig({ type: 'js' });
-        loader.setDRACOLoader(draco);
-
-        // If model references external textures, resolve from its base URL
-        const base = match.url.replace(/\/[^\/]*$/, '/') + '';
-        loader.setResourcePath(base);
-
-        await new Promise<void>((resolve, reject) => {
-          loader.load(
-            match.url,
-            (gltf: any) => {
-              try {
-                const loaded = gltf.scene || gltf.scenes?.[0];
-                if (!loaded) throw new Error('No scene in model');
-
-                // Normalize materials for mobile lighting
-                loaded.traverse((child: any) => {
-                  if (child.isMesh && child.material) {
-                    const materials = Array.isArray(child.material) ? child.material : [child.material];
-                    materials.forEach((mat: any) => {
-                      mat.needsUpdate = true;
-                      if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
-                        if (mat.metalness == null) mat.metalness = 0.1;
-                        if (mat.roughness == null) mat.roughness = 0.85;
-                      }
-                    });
-                  }
-                });
-
-                // Center & scale to reasonable size
-                const box = new THREE.Box3().setFromObject(loaded);
-                const size = new THREE.Vector3();
-                const center = new THREE.Vector3();
-                box.getSize(size);
-                box.getCenter(center);
-                loaded.position.sub(center);
-                const maxDim = Math.max(size.x, size.y, size.z) || 1;
-                loaded.scale.setScalar(1.5 / maxDim);
-
-                group.add(loaded);
-                setDebug(`Loaded: ${match.name}`);
-                setModelLoaded(true);
-                resolve();
-              } catch (e) {
-                reject(e);
-              }
-            },
-            undefined,
-            (err: any) => reject(err)
-          );
-        });
+        const match = findFreeModel(query);
+        if (match) {
+          setDebug(`Loading ${match.name}…`);
+          const root = await loadRemoteGLB(loader, match.url);
+          postProcess(root);
+          group.add(root);
+          setDebug(`${match.name} loaded ✅`);
+          setModelLoaded(true);
+        } else {
+          throw new Error("No model matched query");
+        }
       }
-    } catch (error: any) {
-      setDebug(`Load error: ${error?.message || error}. Using fallback yacht.`);
-      group.add(createFallbackYacht());
+    } catch (e: any) {
+      setDebug(`Model load failed: ${e?.message || e}. Using fallback yacht.`);
+      const root = createFallbackYacht();
+      postProcess(root);
+      group.add(root);
       setModelLoaded(true);
     }
 
-    // ---- Animation loop
+    function postProcess(root: typeof Object3D) {
+      root.traverse?.((child: any) => {
+        if (child.isMesh && child.material) {
+          const mats = Array.isArray(child.material) ? child.material : [child.material];
+          mats.forEach((m: any) => {
+            if (m.isMeshStandardMaterial || m.isMeshPhysicalMaterial) {
+              if (m.metalness == null) m.metalness = 0.15;
+              if (m.roughness == null) m.roughness = 0.85;
+            }
+            m.needsUpdate = true;
+          });
+          child.castShadow = false;
+          child.receiveShadow = false;
+        }
+      });
+
+      const box = new THREE.Box3().setFromObject(root as any);
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      box.getSize(size); box.getCenter(center);
+      (root as any).position?.sub?.(center);
+      const maxDim = Math.max(size.x, size.y, size.z) || 1;
+      (root as any).scale?.setScalar?.(1.6 / maxDim);
+    }
+
     const animate = () => {
       requestAnimationFrame(animate);
-      group.rotation.y += 0.008;
       const t = Date.now() * 0.001;
-      group.position.y = Math.sin(t * 0.5) * 0.1;
-      group.rotation.z = Math.sin(t * 0.3) * 0.02;
+      group.rotation.y += 0.01;
+      group.position.y = Math.sin(t * 0.5) * 0.08;
       renderer.render(scene, camera);
       gl.endFrameEXP();
     };
     animate();
   };
 
+  const onLayout = () => {
+    const gl = glRef.current;
+    const renderer = rendererRef.current;
+    const camera = cameraRef.current;
+    if (!gl || !renderer || !camera) return;
+    const w = gl.drawingBufferWidth;
+    const h = gl.drawingBufferHeight;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  };
+
   return (
-    <View style={styles.root}>
+    <View style={styles.root} onLayout={onLayout}>
       {permission?.granted ? <CameraView style={StyleSheet.absoluteFill} facing="back" /> : null}
       <GLView style={StyleSheet.absoluteFill} onContextCreate={onContextCreate} />
-
-      {/* Debug info */}
       <View pointerEvents="none" style={styles.debugBox}>
         <Text style={styles.debugText} numberOfLines={4}>🚤 {debug}</Text>
-        {modelLoaded && (
-          <Text style={[styles.debugText, { marginTop: 4, color: '#4ade80' }]}>
-            Model loaded successfully!
-          </Text>
-        )}
+        {modelLoaded && <Text style={[styles.debugText, { marginTop: 4, color: "#4ade80" }]}>Model ready</Text>}
       </View>
-
-      {/* Instructions */}
       <View pointerEvents="none" style={styles.instructionsBox}>
-        <Text style={styles.instructionsText}>
-          Point your camera around to see the model in AR!
-        </Text>
+        <Text style={styles.instructionsText}>Move your camera — the yacht overlays the real world.</Text>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#000' },
+  root: { flex: 1, backgroundColor: "#000" },
   debugBox: {
-    position: 'absolute',
-    top: 50,
-    left: 8,
-    right: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    position: "absolute", top: 50, left: 8, right: 8,
+    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
+    backgroundColor: "rgba(0,0,0,0.8)",
   },
-  debugText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  debugText: { color: "#fff", fontSize: 12, fontWeight: "600" },
   instructionsBox: {
-    position: 'absolute',
-    bottom: 100,
-    left: 16,
-    right: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    position: "absolute", bottom: 100, left: 16, right: 16,
+    paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.9)",
   },
-  instructionsText: { color: '#1f2937', fontSize: 14, fontWeight: '600', textAlign: 'center' },
+  instructionsText: { color: "#1f2937", fontSize: 14, fontWeight: "600", textAlign: "center" },
 });
