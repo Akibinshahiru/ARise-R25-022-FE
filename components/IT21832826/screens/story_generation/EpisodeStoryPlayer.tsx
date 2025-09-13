@@ -4,14 +4,14 @@ import axios from "axios";
 import { Asset } from "expo-asset";
 import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system";
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from "expo-linear-gradient";
+import { Accelerometer } from 'expo-sensors';
 import * as Speech from "expo-speech";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Animated, Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View, Image, PanResponder } from "react-native";
-import * as Haptics from 'expo-haptics';
-import { Accelerometer } from 'expo-sensors';
-import ARThreeOverlay from "./ARThreeOverlay";
+import { ActivityIndicator, Alert, Animated, Dimensions, Image, Modal, PanResponder, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import ARBubblesOverlay from "./ARBubblesOverlay";
+import ARThreeOverlay from "./ARThreeOverlay";
 
 // ---------- Types ----------
 type StorySentence = {
@@ -630,6 +630,11 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
         <View style={styles.dialogueBox}>
         <View style={styles.bubbleTail} />
         <Text style={styles.storyText}>{current.text}</Text>
+        {current.type === 'image-cue' ? (
+          <View style={styles.arHintRow}>
+            <Text style={styles.arHintText}>Tip: Tap “Try in AR”.</Text>
+          </View>
+        ) : null}
         <View style={styles.actionsRow}>
           <View style={styles.actionsLeft}>
             {isARNode ? (
@@ -869,6 +874,8 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
                     label={t.ch}
                     tiltX={tiltX}
                     tiltY={tiltY}
+                    viewportW={W}
+                    viewportH={H}
                     onDrop={async (pageX, pageY) => {
                       // find nearest slot center
                       let best=-1, bestD=1e9;
@@ -879,7 +886,7 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
                         const d = Math.hypot(dx,dy);
                         if (d < bestD){ bestD=d; best=i; }
                       }
-                      if (best>=0 && bestD < 80){
+                      if (best>=0 && bestD < 120){
                         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                         onPuzzlePlaceAt(idx, best);
                         return true;
@@ -1101,32 +1108,57 @@ function QuizOption({ iconName, imageUri, selected, onPress }: { iconName: strin
 }
 
 // Draggable floating bubble letter
-function DraggableBubble({ label, onDrop, tiltX, tiltY }: { label: string; onDrop: (pageX:number,pageY:number)=>Promise<boolean>; tiltX?: Animated.Value; tiltY?: Animated.Value }){
+function DraggableBubble({ label, onDrop, tiltX, tiltY, viewportW = 360, viewportH = 640 }: { label: string; onDrop: (pageX:number,pageY:number)=>Promise<boolean>; tiltX?: Animated.Value; tiltY?: Animated.Value; viewportW?: number; viewportH?: number }){
   const base = useRef({ x: Math.random()*140 - 70, y: Math.random()*80 - 40 }).current;
   const baseX = useRef(new Animated.Value(base.x)).current;
   const baseY = useRef(new Animated.Value(base.y)).current;
   const pos = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-  const float = useRef(new Animated.Value(0)).current;
   const vanish = useRef(new Animated.Value(1)).current;
+  const [isDragging, setIsDragging] = useState(false);
+  const floatAnimation = useRef({
+    x: new Animated.Value(0),
+    y: new Animated.Value(0),
+    phase: Math.random() * Math.PI * 2,
+    speed: 0.8 + Math.random() * 0.6,
+    amplitudeX: 60 + Math.random() * 40,
+    amplitudeY: 30 + Math.random() * 20,
+  }).current;
+  const rafRef = useRef<number | null>(null);
   useEffect(() => {
-    const run = Animated.loop(Animated.sequence([
-      Animated.timing(float, { toValue: 1, duration: 1600, useNativeDriver: true }),
-      Animated.timing(float, { toValue: 0, duration: 1600, useNativeDriver: true }),
-    ]));
-    run.start();
-    return () => run.stop();
-  }, [float]);
+    const loop = () => {
+      if (!isDragging) {
+        const t = Date.now() * 0.001;
+        const phase = t * floatAnimation.speed + floatAnimation.phase;
+        const tx = Math.sin(phase) * floatAnimation.amplitudeX;
+        const ty = Math.sin(phase * 0.7) * floatAnimation.amplitudeY;
+        floatAnimation.x.setValue(tx);
+        floatAnimation.y.setValue(ty);
+        const bx = (baseX as any)._value ?? 0;
+        const by = (baseY as any)._value ?? 0;
+        const px = bx + tx;
+        const py = by + ty;
+        const margin = 60;
+        const targetX = Math.min(Math.max(px, -viewportW/2 + margin), viewportW/2 - margin);
+        const targetY = Math.min(Math.max(py, -viewportH/3 + margin), viewportH/3 - margin);
+        if (Math.abs(targetX - px) > 1) baseX.setValue(bx + (targetX - px) * 0.04);
+        if (Math.abs(targetY - py) > 1) baseY.setValue(by + (targetY - py) * 0.04);
+      }
+      rafRef.current = requestAnimationFrame(loop);
+    };
+    rafRef.current = requestAnimationFrame(loop);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [isDragging, floatAnimation, baseX, baseY, viewportW, viewportH]);
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
-    onPanResponderGrant: () => { Haptics.selectionAsync(); },
+    onPanResponderGrant: () => { setIsDragging(true); Haptics.selectionAsync(); },
     onPanResponderMove: Animated.event([null, { dx: pos.x, dy: pos.y }], { useNativeDriver: false }),
     onPanResponderRelease: async (e, gesture) => {
       const ok = await onDrop(e.nativeEvent.pageX, e.nativeEvent.pageY);
       if (!ok) {
-        Animated.spring(pos, { toValue: { x: 0, y: 0 }, useNativeDriver: true }).start();
+        Animated.spring(pos, { toValue: { x: 0, y: 0 }, useNativeDriver: true }).start(() => setIsDragging(false));
       } else {
         // gracefully vanish to imply snap-in
-        Animated.timing(vanish, { toValue: 0, duration: 180, useNativeDriver: true }).start();
+        Animated.timing(vanish, { toValue: 0, duration: 180, useNativeDriver: true }).start(() => setIsDragging(false));
       }
     },
   })).current;
@@ -1134,8 +1166,8 @@ function DraggableBubble({ label, onDrop, tiltX, tiltY }: { label: string; onDro
     <Animated.View
       {...panResponder.panHandlers}
       style={{ margin: 8, opacity: vanish, transform: [ 
-        { translateX: Animated.add(Animated.add(baseX, pos.x), tiltX || new Animated.Value(0)) }, 
-        { translateY: Animated.add(Animated.add(Animated.add(baseY, pos.y), float.interpolate({ inputRange:[0,1], outputRange:[-3,3] })), tiltY || new Animated.Value(0)) } 
+        { translateX: Animated.add(Animated.add(baseX, Animated.add(floatAnimation.x, pos.x)), (isDragging ? new Animated.Value(0) : (tiltX || new Animated.Value(0)))) }, 
+        { translateY: Animated.add(Animated.add(baseY, Animated.add(floatAnimation.y, pos.y)), (isDragging ? new Animated.Value(0) : (tiltY || new Animated.Value(0)))) } 
       ] }}
     >
       <View style={styles.tileCell}>
@@ -1175,6 +1207,8 @@ const styles = StyleSheet.create({
   blobThree: { width: 260, height: 260, right: -60, bottom: -80, borderRadius: 9999 },
 
   bubbleTail: { position: 'absolute', left: 12, top: 24, width: 0, height: 0, borderTopWidth: 10, borderBottomWidth: 10, borderRightWidth: 14, borderTopColor: 'transparent', borderBottomColor: 'transparent', borderRightColor: '#ffffff' },
+  arHintRow: { marginTop: 10, backgroundColor: '#fef3c7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  arHintText: { color: '#92400e', fontWeight: '800' },
 
   // Evaluation modal styles
   evalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20 },
