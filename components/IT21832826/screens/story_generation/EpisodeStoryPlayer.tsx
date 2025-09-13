@@ -82,6 +82,8 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
   const [arOpen, setArOpen] = useState(false);
   const [showBurst, setShowBurst] = useState(false);
   const [evaluating, setEvaluating] = useState(false);
+  const [evalVisible, setEvalVisible] = useState(false);
+  const [evalResult, setEvalResult] = useState<any | null>(null);
 
   const float1 = useRef(new Animated.Value(0)).current;
   const float2 = useRef(new Animated.Value(0)).current;
@@ -184,11 +186,8 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
     try {
       setEvaluating(true);
       const result = await evaluatePronunciation(scanned, current.text);
-      const score = result?.pronunciation_score ?? result?.score ?? result?.data?.score;
-      const msg = typeof score === 'number'
-        ? `Score: ${Math.round(score * 100) / 100}\n${result?.feedback_message ?? ''}`
-        : (result?.feedback_message || 'Submitted for evaluation.');
-      Alert.alert('Pronunciation', msg);
+      setEvalResult(result || {});
+      setEvalVisible(true);
     } catch (e: any) {
       Alert.alert('Pronunciation', e?.message || 'Failed to evaluate');
     } finally {
@@ -304,6 +303,58 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
 
       {/* Magic burst on next */}
       {showBurst ? <MagicBurst /> : null}
+
+      {/* Pronunciation Result Modal */}
+      <Modal visible={evalVisible} transparent animationType="fade" onRequestClose={() => setEvalVisible(false)}>
+        <View style={styles.evalOverlay}>
+          <View style={styles.evalCard}>
+            <Text style={styles.evalTitle}>Great effort!</Text>
+            {(() => {
+              const s = Math.max(0, Math.min(1, Number(evalResult?.pronunciation_score ?? 0)));
+              const pct = Math.round(s * 100);
+              const mood = pct >= 90 ? '🌟' : pct >= 70 ? '😊' : pct >= 50 ? '👍' : '💪';
+              return (
+                <>
+                  <Text style={styles.evalEmoji}>{evalResult?.show_trophy ? '🏆' : mood}</Text>
+                  <View style={styles.evalScoreRow}>
+                    <Text style={styles.evalScoreLabel}>Pronunciation</Text>
+                    <View style={styles.evalScorePill}><Text style={styles.evalScorePillText}>{pct}%</Text></View>
+                  </View>
+                  <View style={styles.evalBarWrap}>
+                    <View style={[styles.evalBarFill, { width: `${Math.max(6, pct)}%` }]} />
+                  </View>
+                </>
+              );
+            })()}
+            {evalResult?.feedback_message ? (
+              <Text style={styles.evalFeedback}>{String(evalResult.feedback_message)}</Text>
+            ) : null}
+            {evalResult?.recommended_action ? (
+              <Text style={styles.evalHint}>{String(evalResult.recommended_action)}</Text>
+            ) : null}
+
+            <View style={styles.evalButtonsRow}>
+              <TouchableOpacity
+                disabled={evaluating}
+                onPress={() => { setEvalVisible(false); onEvaluate(); }}
+                style={[styles.button, styles.secondary, styles.evalBtn, evaluating && { opacity: 0.6 }] as any}
+              >
+                <Text style={[styles.buttonText, { color: '#1f1147' }]}>{evaluating ? 'Evaluating…' : 'Try Again 🔁'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  const next = String(evalResult?.next_action || 'continue_story');
+                  setEvalVisible(false);
+                  if (next === 'continue_story') onNext();
+                }}
+                style={[styles.button, styles.primary, styles.evalBtn]}
+              >
+                <Text style={styles.buttonText}>{String(evalResult?.next_action) === 'provide_help' ? 'Keep Practicing' : 'Continue ▶'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -381,4 +432,20 @@ const styles = StyleSheet.create({
   blobThree: { width: 260, height: 260, right: -60, bottom: -80, borderRadius: 9999 },
 
   bubbleTail: { position: 'absolute', left: 12, top: 24, width: 0, height: 0, borderTopWidth: 10, borderBottomWidth: 10, borderRightWidth: 14, borderTopColor: 'transparent', borderBottomColor: 'transparent', borderRightColor: '#ffffff' },
+
+  // Evaluation modal styles
+  evalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  evalCard: { width: '100%', maxWidth: 420, backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12 },
+  evalTitle: { fontSize: 20, fontWeight: '900', color: '#1f1147', textAlign: 'center' },
+  evalEmoji: { fontSize: 48, textAlign: 'center', marginVertical: 8 },
+  evalScoreRow: { marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  evalScoreLabel: { color: '#1f1147', fontWeight: '800' },
+  evalScorePill: { backgroundColor: '#e9d5ff', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  evalScorePillText: { color: '#1f1147', fontWeight: '900' },
+  evalBarWrap: { marginTop: 10, height: 10, backgroundColor: '#F3F4F6', borderRadius: 6, overflow: 'hidden' },
+  evalBarFill: { height: '100%', backgroundColor: '#8B5CF6' },
+  evalFeedback: { marginTop: 12, color: '#1f1147', fontSize: 15, fontWeight: '700' },
+  evalHint: { marginTop: 6, color: '#6b7280' },
+  evalButtonsRow: { marginTop: 16, flexDirection: 'row', justifyContent: 'space-between' },
+  evalBtn: { flex: 1, marginHorizontal: 4 },
 });
