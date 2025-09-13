@@ -6,6 +6,7 @@ import { Audio } from "expo-av";
 import * as FileSystem from "expo-file-system";
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from 'expo-router';
 import { Accelerometer } from 'expo-sensors';
 import * as Speech from "expo-speech";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -80,6 +81,7 @@ async function evaluatePronunciation(word: string, sentence: string): Promise<an
 
 // ---------- Component ----------
 export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = false }: Props) {
+  const router = useRouter();
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<StoryResponse | null>(initialData ?? null);
@@ -516,6 +518,14 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
     setTimeout(() => setShowBurst(false), 700);
   }, [index, total]);
 
+  const onFinish = useCallback(() => {
+    if (count > 3) {
+      router.push('/akila/celebration');
+    } else {
+      router.push('/akila/encouragement');
+    }
+  }, [count, router]);
+
   const speak = useCallback((rate: number) => {
     try { Speech.speak(word, { rate, pitch: 1.2, language: 'en-US' }); } catch {}
   }, [word]);
@@ -629,6 +639,7 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
         transform: [{ translateY: dialogFloat.interpolate({ inputRange: [0, 1], outputRange: [0, -2] }) }],
       }]}>
         <View style={styles.dialogueBox}>
+        <LinearGradient colors={["#FFF7ED", "#FEF3C7", "#EDE9FE"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.dialogueBgGradient} />
         <View style={styles.bubbleTail} />
         <Text style={styles.storyText}>{current.text}</Text>
         {current.type === 'image-cue' ? (
@@ -659,8 +670,8 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
             ) : null}
           </View>
 
-          <TouchableOpacity onPress={onNext} style={[styles.button, styles.primary]}>
-            <Text style={styles.buttonText}>Next</Text>
+          <TouchableOpacity onPress={(index === total - 1) ? onFinish : onNext} style={[styles.button, styles.primary]}>
+            <Text style={styles.buttonText}>{(index === total - 1) ? 'Finish' : 'Next'}</Text>
           </TouchableOpacity>
         </View>
         </View>
@@ -1219,7 +1230,8 @@ const styles = StyleSheet.create({
   blobTwo: { width: 160, height: 160, right: -30, top: 60, borderRadius: 9999 },
   blobThree: { width: 260, height: 260, right: -60, bottom: -80, borderRadius: 9999 },
 
-  bubbleTail: { position: 'absolute', left: 12, top: 24, width: 0, height: 0, borderTopWidth: 10, borderBottomWidth: 10, borderRightWidth: 14, borderTopColor: 'transparent', borderBottomColor: 'transparent', borderRightColor: '#ffffff' },
+  bubbleTail: { position: 'absolute', left: 12, top: 24, width: 0, height: 0, borderTopWidth: 10, borderBottomWidth: 10, borderRightWidth: 14, borderTopColor: 'transparent', borderBottomColor: 'transparent', borderRightColor: '#FFF7ED' },
+  dialogueBgGradient: { ...StyleSheet.absoluteFillObject as any, borderRadius: 16 },
   arHintRow: { marginTop: 10, backgroundColor: '#fef3c7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
   arHintText: { color: '#92400e', fontWeight: '800' },
 
