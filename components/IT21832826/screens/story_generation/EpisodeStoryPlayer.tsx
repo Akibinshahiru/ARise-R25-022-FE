@@ -101,6 +101,13 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
   const [quizSelection, setQuizSelection] = useState<string | null>(null);
   const [quizOptions, setQuizOptions] = useState<Array<{ key: string; label: string; iconName: string; imageUri?: string; correct: boolean }>>([]);
 
+  // Quiz 2: Word Hunt
+  const [huntVisible, setHuntVisible] = useState(false);
+  const [huntDone, setHuntDone] = useState(false);
+  const [huntCorrect, setHuntCorrect] = useState<boolean | null>(null);
+  const [huntSelection, setHuntSelection] = useState<string | null>(null);
+  const [huntOptions, setHuntOptions] = useState<Array<{ key: string; word: string; correct: boolean }>>([]);
+
   const float1 = useRef(new Animated.Value(0)).current;
   const float2 = useRef(new Animated.Value(0)).current;
   const float3 = useRef(new Animated.Value(0)).current;
@@ -134,6 +141,7 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
           const n = parseInt(stored, 10);
           if (!Number.isNaN(n)) setCount(n);
         }
+        // no global skip persistence; quizzes can be skipped per instance only
       } catch {}
       setCountLoaded(true);
     })();
@@ -203,6 +211,23 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
     return raw;
   }
 
+  function buildHuntOptions(target: string) {
+    const base = ['the','and','play','green','blue','happy','jump','bright','moon','song','cat','dog','ball','book','tree','car','boat'];
+    const words: string[] = [];
+    // insert target once
+    words.push(target);
+    // add distractors up to 9 total
+    for (let i = 0; i < base.length && words.length < 9; i++) {
+      if (base[i].toLowerCase() !== target.toLowerCase()) words.push(base[i]);
+    }
+    // shuffle
+    for (let i = words.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [words[i], words[j]] = [words[j], words[i]];
+    }
+    return words.map((w, idx) => ({ key: `w${idx}`, word: w, correct: w.toLowerCase() === target.toLowerCase() }));
+  }
+
   // Open quiz right after first three sentences (on entering index 3)
   useEffect(() => {
     if (!quizDone && index === 3) {
@@ -214,6 +239,27 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
       // Icons require no network prefetch
     }
   }, [index, scanned, quizDone]);
+
+  // Open Word Hunt after six sentences (on entering index 6)
+  useEffect(() => {
+    if (!huntDone && index === 6) {
+      const opts = buildHuntOptions(scanned);
+      setHuntOptions(opts);
+      setHuntSelection(null);
+      setHuntCorrect(null);
+      setHuntVisible(true);
+    }
+  }, [index, scanned, huntDone]);
+
+  const onSkipCurrentImageQuiz = useCallback(() => {
+    setQuizVisible(false);
+    setQuizDone(true);
+  }, []);
+
+  const onSkipCurrentHuntQuiz = useCallback(() => {
+    setHuntVisible(false);
+    setHuntDone(true);
+  }, []);
 
   // Load story
   useEffect(() => {
@@ -503,6 +549,9 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
           <View style={styles.quizCard}>
             <Text style={styles.quizTitle}>Match the picture!</Text>
             <Text style={styles.quizWord}>{scanned}</Text>
+            <TouchableOpacity onPress={onSkipCurrentImageQuiz} style={styles.skipLink}>
+              <Text style={styles.skipLinkText}>Skip this quiz</Text>
+            </TouchableOpacity>
             <View style={styles.quizRow}>
               {quizOptions.map(opt => (
                 <QuizOption
@@ -531,6 +580,53 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
                 <TouchableOpacity
                   style={[styles.button, styles.primary, styles.fbBtn]}
                   onPress={() => { setQuizVisible(false); setQuizDone(true); }}
+                >
+                  <Text style={styles.buttonText}>Continue ▶</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Word Hunt Quiz */}
+      <Modal visible={huntVisible} transparent animationType="fade" onRequestClose={() => {}}>
+        <View style={styles.quizOverlay}>
+          <View style={styles.quizCard}>
+            <Text style={styles.quizTitle}>Spot the Word!</Text>
+            <Text style={styles.quizWord}>Find “{scanned}”</Text>
+            <TouchableOpacity onPress={onSkipCurrentHuntQuiz} style={styles.skipLink}>
+              <Text style={styles.skipLinkText}>Skip this quiz</Text>
+            </TouchableOpacity>
+
+            <View style={styles.huntGrid}>
+              {huntOptions.map(opt => (
+                <TouchableOpacity
+                  key={opt.key}
+                  onPress={async () => {
+                    if (huntSelection) return;
+                    setHuntSelection(opt.key);
+                    const ok = !!opt.correct;
+                    setHuntCorrect(ok);
+                    await playQuizChime(ok);
+                  }}
+                  style={[styles.chip, huntSelection === opt.key && (opt.correct ? styles.chipGood : styles.chipBad)]}
+                  activeOpacity={0.9}
+                >
+                  <Text style={styles.chipText}>{opt.word}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {huntCorrect !== null && (
+              <View style={[styles.fbCard, huntCorrect ? styles.fbGood : styles.fbTry] }>
+                <ConfettiOverlay visible={!!huntCorrect} />
+                <Text style={styles.fbEmoji}>{huntCorrect ? '🌟' : '⭐'}</Text>
+                <Text style={styles.fbTitle}>{huntCorrect ? 'You found it!' : 'Nice try!'}</Text>
+                <Text style={styles.fbText}>{huntCorrect ? 'Great spotting.' : 'Keep trying — you’ll get it!'}</Text>
+                <TouchableOpacity
+                  style={[styles.button, styles.primary, styles.fbBtn]}
+                  onPress={() => { setHuntVisible(false); setHuntDone(true); }}
                 >
                   <Text style={styles.buttonText}>Continue ▶</Text>
                 </TouchableOpacity>
@@ -763,15 +859,22 @@ const styles = StyleSheet.create({
 
   // Quiz styles
   quizOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 20 },
-  quizCard: { width: '100%', maxWidth: 460, backgroundColor: '#ffffff', borderRadius: 24, padding: 20 },
-  quizTitle: { fontSize: 20, fontWeight: '900', color: '#1f1147', textAlign: 'center' },
-  quizWord: { fontSize: 22, fontWeight: '900', color: '#6d28d9', textAlign: 'center', marginTop: 6 },
+  quizCard: { width: '100%', maxWidth: 480, backgroundColor: '#ffffff', borderRadius: 28, padding: 20, borderWidth: 2, borderColor: '#e9d5ff' },
+  quizTitle: { fontSize: 22, fontWeight: '900', color: '#4c1d95', textAlign: 'center' },
+  quizWord: { fontSize: 24, fontWeight: '900', color: '#6d28d9', textAlign: 'center', marginTop: 6 },
   quizRow: { marginTop: 16, flexDirection: 'row', justifyContent: 'space-between' },
   quizOption: { flex: 1, marginHorizontal: 6 },
   quizOptionBtn: { backgroundColor: '#f5f3ff', borderRadius: 18, overflow: 'hidden', height: 120 },
   quizOptionImg: { width: '100%', height: '100%' },
   quizLoading: { ...StyleSheet.absoluteFillObject as any, backgroundColor: 'rgba(255,255,255,0.8)', alignItems: 'center', justifyContent: 'center' },
   quizLoadingText: { color: '#6b7280', fontWeight: '700' },
+  skipLink: { alignSelf: 'flex-end', marginTop: 8 },
+  skipLinkText: { color: '#6d28d9', fontWeight: '800' },
+  huntGrid: { marginTop: 16, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  chip: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, backgroundColor: '#f5f3ff', marginBottom: 12, marginRight: 8, borderWidth: 2, borderColor: '#e9d5ff' },
+  chipText: { color: '#1f1147', fontWeight: '900', fontSize: 18 },
+  chipGood: { backgroundColor: '#ecfeff', borderColor: '#a7f3d0' },
+  chipBad: { backgroundColor: '#fff7ed', borderColor: '#fecaca' },
   fbCard: { marginTop: 16, borderRadius: 20, padding: 16, alignItems: 'center' },
   fbGood: { backgroundColor: '#ecfeff' },
   fbTry: { backgroundColor: '#fff7ed' },
