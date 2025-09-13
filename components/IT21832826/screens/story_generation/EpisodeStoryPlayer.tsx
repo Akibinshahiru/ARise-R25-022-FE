@@ -55,6 +55,11 @@ function getPronunciationUrl(): string {
   return (process.env.EXPO_PUBLIC_API_BASE_URL_PRONUNCIATION as string) || "http://localhost:8000/evaluate-mobile";
 }
 
+function getPronunciationApiBase(): string {
+  // Base for pronunciation service (used for IEP report generation)
+  return (process.env.EXPO_PUBLIC_API_BASE_URL_IEP as string) || "http://localhost:8002";
+}
+
 // Evaluate pronunciation for a word within a sentence
 async function evaluatePronunciation(word: string, sentence: string): Promise<any> {
   // Use bundled demo audio and send as base64 to the mobile endpoint
@@ -70,12 +75,25 @@ async function evaluatePronunciation(word: string, sentence: string): Promise<an
   const form = new FormData();
   form.append("audio_base64", base64 as any);
   form.append("session_id", "demo_session_1" as any);
-  form.append("student_id", "student_001" as any);
+  form.append("student_id", "22944d43-a7f8-470d-b877-294ac5eea20c" as any);
   form.append("target_word", word as any);
   form.append("context_sentence", sentence as any);
 
   const url = getPronunciationUrl();
   const res = await axios.post(url, form, { headers: { "Content-Type": "multipart/form-data" }, timeout: 30000 });
+  return res.data;
+}
+
+// Generate IEP report for a student after evaluation
+async function generateIEPReport(studentId: string, req?: { days_back?: number; include_detailed_analysis?: boolean; report_format?: string; }): Promise<any> {
+  const base = getPronunciationApiBase();
+  const url = `${base}/generate/${studentId}`;
+  const body = {
+    days_back: req?.days_back ?? 90,
+    include_detailed_analysis: req?.include_detailed_analysis ?? true,
+    report_format: req?.report_format ?? 'comprehensive',
+  };
+  const res = await axios.post(url, body, { timeout: 30000 });
   return res.data;
 }
 
@@ -96,6 +114,7 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
   const [evalResult, setEvalResult] = useState<any | null>(null);
   const [count, setCount] = useState(0); // success counter (> 0.7)
   const [countLoaded, setCountLoaded] = useState(false);
+  const [iepReport, setIepReport] = useState<any | null>(null);
 
   const COUNT_KEY = 'ARise:pronunciation_success_count';
 
@@ -550,20 +569,25 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
         // restore playback-friendly audio mode
         try { await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, shouldDuckAndroid: true }); } catch {}
         setEvaluating(true);
+      try {
+        const result = await evaluatePronunciation(scanned, current?.text || '');
+        setEvalResult(result || {});
+        // increment success counter if score > 0.7
+        const raw = (result?.pronunciation_score ?? result?.score ?? result?.data?.score) as any;
+        const score = Number(raw);
+        if (!Number.isNaN(score) && score > 0.7) {
+          setCount((c) => c + 1);
+        }
+        // Generate IEP report after evaluation (based on accumulated evaluations)
         try {
-          const result = await evaluatePronunciation(scanned, current?.text || '');
-          setEvalResult(result || {});
-          // increment success counter if score > 0.7
-          const raw = (result?.pronunciation_score ?? result?.score ?? result?.data?.score) as any;
-          const score = Number(raw);
-          if (!Number.isNaN(score) && score > 0.7) {
-            setCount((c) => c + 1);
-          }
-          setEvalVisible(true);
-        } catch (e: any) {
-          Alert.alert('Pronunciation', e?.message || 'Failed to evaluate');
-        } finally {
-          setEvaluating(false);
+          const rep = await generateIEPReport('22944d43-a7f8-470d-b877-294ac5eea20c', { days_back: 90, include_detailed_analysis: true, report_format: 'comprehensive' });
+          setIepReport(rep);
+        } catch {}
+        setEvalVisible(true);
+      } catch (e: any) {
+        Alert.alert('Pronunciation', e?.message || 'Failed to evaluate');
+      } finally {
+        setEvaluating(false);
         }
       }, 2500);
     } catch (e: any) {

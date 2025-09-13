@@ -48,7 +48,9 @@
     "react-native-web": "~0.20.0",
     "react-native-webview": "13.13.5",
     "three": "^0.166.0",
-    "three-stdlib": "^2.21.0"
+    "three-stdlib": "^2.21.0",
+    "expo-print": "~14.1.4",
+    "expo-sharing": "~13.1.5"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
