@@ -7,8 +7,11 @@ import * as FileSystem from "expo-file-system";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Speech from "expo-speech";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Animated, Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View, Image } from "react-native";
+import { ActivityIndicator, Alert, Animated, Dimensions, Modal, StyleSheet, Text, TouchableOpacity, View, Image, PanResponder } from "react-native";
+import * as Haptics from 'expo-haptics';
+import { Accelerometer } from 'expo-sensors';
 import ARThreeOverlay from "./ARThreeOverlay";
+import ARBubblesOverlay from "./ARBubblesOverlay";
 
 // ---------- Types ----------
 type StorySentence = {
@@ -119,6 +122,12 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
   const [puzzleSlots, setPuzzleSlots] = useState<Array<{ id: string; ch: string | null }>>([]);
   const [puzzleCorrect, setPuzzleCorrect] = useState<boolean | null>(null);
   const [puzzleFloating, setPuzzleFloating] = useState(new Animated.Value(0));
+  const puzzleContainerRef = useRef<View>(null);
+  const [puzzleContainerOffset, setPuzzleContainerOffset] = useState<{x:number,y:number}>({x:0,y:0});
+  const slotRefs = useRef<Array<View | null>>([]);
+  const [slotCenters, setSlotCenters] = useState<Array<{x:number,y:number}>>([]);
+  const tiltX = useRef(new Animated.Value(0)).current;
+  const tiltY = useRef(new Animated.Value(0)).current;
 
   const float1 = useRef(new Animated.Value(0)).current;
   const float2 = useRef(new Animated.Value(0)).current;
@@ -298,6 +307,19 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
     }
   }, [index, scanned, puzzleDone, puzzleFloating]);
 
+  // Tilt assist using accelerometer
+  useEffect(() => {
+    if (!puzzleVisible) return;
+    let sub: any;
+    try { Accelerometer.setUpdateInterval(100); } catch {}
+    sub = Accelerometer.addListener(({ x, y }) => {
+      // x: tilt left/right, y: tilt up/down (device coords)
+      Animated.timing(tiltX, { toValue: x * 22, duration: 90, useNativeDriver: true }).start();
+      Animated.timing(tiltY, { toValue: -y * 22, duration: 90, useNativeDriver: true }).start();
+    });
+    return () => { try { sub && sub.remove && sub.remove(); } catch {}; };
+  }, [puzzleVisible, tiltX, tiltY]);
+
   const onPuzzlePlace = useCallback((tileIdx: number) => {
     // place tile into next empty slot
     setPuzzleSlots((prev) => {
@@ -309,6 +331,15 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
       return next;
     });
     // remove tile from rack
+    setPuzzleTiles((prev) => prev.map((t, i) => (i === tileIdx ? { ...t, ch: '' } : t)));
+  }, [puzzleTiles]);
+
+  const onPuzzlePlaceAt = useCallback((tileIdx: number, slotIdx: number) => {
+    setPuzzleSlots((prev) => {
+      const next = prev.map((s) => ({ ...s }));
+      if (!next[slotIdx].ch) next[slotIdx].ch = puzzleTiles[tileIdx].ch;
+      return next;
+    });
     setPuzzleTiles((prev) => prev.map((t, i) => (i === tileIdx ? { ...t, ch: '' } : t)));
   }, [puzzleTiles]);
 
@@ -341,6 +372,33 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
     setPuzzleTiles(scrambled.map((ch, i) => ({ id: `t${i}`, ch })));
     setPuzzleSlots(letters.map((_, i) => ({ id: `s${i}`, ch: null })));
   }, [scanned]);
+
+  // Play a gentle chime for quiz feedback (declare early so it's available to handlers below)
+  const playQuizChime = useCallback(async (success: boolean) => {
+    try {
+      // Ensure playback works in silent mode
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, shouldDuckAndroid: true });
+      if (success) {
+        // Play a short musical-like flourish (staggered chimes)
+        const uri = 'https://assets.mixkit.co/sfx/preview/mixkit-quick-win-video-game-notification-269.wav';
+        const s1 = await Audio.Sound.createAsync({ uri }, { volume: 1.0 });
+        const s2 = await Audio.Sound.createAsync({ uri }, { volume: 0.9 });
+        const s3 = await Audio.Sound.createAsync({ uri }, { volume: 0.85 });
+        await s1.sound.playAsync();
+        setTimeout(() => { try { s2.sound.playAsync(); } catch {} }, 160);
+        setTimeout(() => { try { s3.sound.playAsync(); } catch {} }, 320);
+        setTimeout(() => { try { s1.sound.unloadAsync(); s2.sound.unloadAsync(); s3.sound.unloadAsync(); } catch {} }, 3000);
+      } else {
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: 'https://assets.mixkit.co/sfx/preview/mixkit-soft-pop-3564.wav' },
+          { shouldPlay: true, volume: 0.9 }
+        );
+        setTimeout(() => { try { sound.unloadAsync(); } catch {} }, 2000);
+      }
+    } catch {
+      // No speech fallback per request
+    }
+  }, []);
 
   const onPuzzleCheck = useCallback(async () => {
     const attempt = (puzzleSlots.map((s) => s.ch || '')).join('');
@@ -442,33 +500,6 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
         });
       } catch {}
     })();
-  }, []);
-
-  // Play a gentle chime for quiz feedback
-  const playQuizChime = useCallback(async (success: boolean) => {
-    try {
-      // Ensure playback works in silent mode
-      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, shouldDuckAndroid: true });
-      if (success) {
-        // Play a short musical-like flourish (staggered chimes)
-        const uri = 'https://assets.mixkit.co/sfx/preview/mixkit-quick-win-video-game-notification-269.wav';
-        const s1 = await Audio.Sound.createAsync({ uri }, { volume: 1.0 });
-        const s2 = await Audio.Sound.createAsync({ uri }, { volume: 0.9 });
-        const s3 = await Audio.Sound.createAsync({ uri }, { volume: 0.85 });
-        await s1.sound.playAsync();
-        setTimeout(() => { try { s2.sound.playAsync(); } catch {} }, 160);
-        setTimeout(() => { try { s3.sound.playAsync(); } catch {} }, 320);
-        setTimeout(() => { try { s1.sound.unloadAsync(); s2.sound.unloadAsync(); s3.sound.unloadAsync(); } catch {} }, 3000);
-      } else {
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: 'https://assets.mixkit.co/sfx/preview/mixkit-soft-pop-3564.wav' },
-          { shouldPlay: true, volume: 0.9 }
-        );
-        setTimeout(() => { try { sound.unloadAsync(); } catch {} }, 2000);
-      }
-    } catch {
-      // No speech fallback per request
-    }
   }, []);
 
   const isARNode = true; // allow AR on all screens
@@ -663,9 +694,6 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
           <View style={styles.quizCard}>
             <Text style={styles.quizTitle}>Match the picture!</Text>
             <Text style={styles.quizWord}>{scanned}</Text>
-            <TouchableOpacity onPress={onSkipCurrentImageQuiz} style={styles.skipLink}>
-              <Text style={styles.skipLinkText}>Skip this quiz</Text>
-            </TouchableOpacity>
             <View style={styles.quizRow}>
               {quizOptions.map(opt => (
                 <QuizOption
@@ -717,9 +745,7 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
                 <View style={styles.flashBarWrap}>
                   <Animated.View style={[styles.flashBarFill, { width: flashAnim.interpolate({ inputRange: [0,1], outputRange: ['0%','100%'] }) }]} />
                 </View>
-                <TouchableOpacity onPress={onSkipCurrentHuntQuiz} style={styles.skipLink}>
-                  <Text style={styles.skipLinkText}>Skip this quiz</Text>
-                </TouchableOpacity>
+                
               </View>
             ) : (
               <>
@@ -734,9 +760,7 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
                     />
                   </View>
                 </View>
-                <TouchableOpacity onPress={onSkipCurrentHuntQuiz} style={styles.skipLink}>
-                  <Text style={styles.skipLinkText}>Skip this quiz</Text>
-                </TouchableOpacity>
+                
                 <View style={styles.huntGrid}>
                   {huntOptions.map((opt, idx) => (
                     <Animated.View key={opt.key} style={{
@@ -777,6 +801,11 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
                     </TouchableOpacity>
                   </View>
                 )}
+                <View style={styles.skipBottomRow}>
+                  <TouchableOpacity onPress={onSkipCurrentHuntQuiz}>
+                    <Text style={styles.skipLinkText}>Skip this quiz</Text>
+                  </TouchableOpacity>
+                </View>
               </>
             )}
           </View>
@@ -786,39 +815,88 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
       {/* Word Puzzle (Scrambled Letters in AR) */}
       <Modal visible={puzzleVisible} transparent animationType="fade" onRequestClose={() => {}}>
         <View style={{ flex: 1 }}>
-          {/* AR background */}
-          <ARThreeOverlay query={word} />
+          {/* AR background without models: camera feed */}
+          <ARBubblesOverlay>
+            {/* Optional: could draw faint floating bubbles here in the future */}
+          </ARBubblesOverlay>
           {/* Floating overlay */}
           <View style={styles.puzzleOverlay}>
             <Text style={styles.quizTitle}>Word Puzzle</Text>
             <Text style={styles.quizWord}>Arrange the letters to make the word</Text>
             <Text style={[styles.quizWord, { color: '#1f1147' }]}>{' '}</Text>
-            <TouchableOpacity onPress={() => { setPuzzleVisible(false); setPuzzleDone(true); }} style={styles.skipLink}>
-              <Text style={styles.skipLinkText}>Skip this quiz</Text>
-            </TouchableOpacity>
+            
 
             {/* Slots row */}
             <View style={styles.puzzleSlotsRow}>
               {puzzleSlots.map((s, i) => (
-                <TouchableOpacity key={s.id} onPress={() => onPuzzleRemove(i)} style={[styles.slotCell, s.ch && styles.slotFilled]} activeOpacity={0.9}>
+                <TouchableOpacity
+                  key={s.id}
+                  ref={(r) => { slotRefs.current[i] = r; }}
+                  onLayout={() => {
+                    // measure center for drop detection
+                    try {
+                      (slotRefs.current[i] as any)?.measureInWindow?.((x:number,y:number,w:number,h:number) => {
+                        setSlotCenters((prev) => {
+                          const next = [...prev];
+                          next[i] = { x: x + w/2, y: y + h/2 };
+                          return next;
+                        });
+                      });
+                    } catch {}
+                  }}
+                  onPress={() => onPuzzleRemove(i)}
+                  style={[styles.slotCell, s.ch && styles.slotFilled]}
+                  activeOpacity={0.9}
+                >
                   <Text style={styles.slotText}>{s.ch || '_'}</Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            {/* Letter rack (floating) */}
-            <Animated.View style={[styles.puzzleRack, {
-              transform: [{ translateY: puzzleFloating.interpolate({ inputRange: [0,1], outputRange: [4, -4] }) }]
-            }]}>
+            {/* Letter bubbles (draggable, floating) */}
+            <Animated.View
+              ref={puzzleContainerRef as any}
+              onLayout={() => {
+                try { (puzzleContainerRef.current as any)?.measureInWindow?.((x:number,y:number)=> setPuzzleContainerOffset({x,y})); } catch {}
+              }}
+              style={[styles.puzzleRack, { height: 160, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center',
+                transform: [{ translateY: puzzleFloating.interpolate({ inputRange: [0,1], outputRange: [4, -4] }) }] }]}
+            >
               {puzzleTiles.map((t, idx) => (
-                <TouchableOpacity key={t.id} disabled={!t.ch} onPress={() => onPuzzlePlace(idx)} style={[styles.tileCell, !t.ch && { opacity: 0.35 }]} activeOpacity={0.9}>
-                  <Text style={styles.tileText}>{t.ch || ''}</Text>
-                </TouchableOpacity>
+                t.ch ? (
+                  <DraggableBubble
+                    key={t.id}
+                    label={t.ch}
+                    tiltX={tiltX}
+                    tiltY={tiltY}
+                    onDrop={async (pageX, pageY) => {
+                      // find nearest slot center
+                      let best=-1, bestD=1e9;
+                      for (let i=0;i<slotCenters.length;i++){
+                        const c = slotCenters[i];
+                        if(!c) continue;
+                        const dx = c.x - pageX, dy = c.y - pageY;
+                        const d = Math.hypot(dx,dy);
+                        if (d < bestD){ bestD=d; best=i; }
+                      }
+                      if (best>=0 && bestD < 80){
+                        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        onPuzzlePlaceAt(idx, best);
+                        return true;
+                      } else {
+                        await Haptics.selectionAsync();
+                        return false;
+                      }
+                    }}
+                  />
+                ) : (
+                  <View key={`empty-${idx}`} style={[styles.tileCell, { opacity: 0.25 }]} />
+                )
               ))}
             </Animated.View>
 
-            {/* Controls */}
-            <View style={styles.puzzleButtonsRow}>
+            {/* Controls (bottom) */}
+            <View style={styles.puzzleButtonsBottom}>
               <TouchableOpacity onPress={onPuzzleReset} style={[styles.button, styles.secondary, { flex: 1, marginRight: 6 }]}>
                 <Text style={[styles.buttonText, { color: '#1f1147' }]}>Reset</Text>
               </TouchableOpacity>
@@ -841,6 +919,17 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
                 </TouchableOpacity>
               </View>
             )}
+            <View style={styles.skipBottomRow}>
+              <TouchableOpacity onPress={onSkipCurrentImageQuiz}>
+                <Text style={styles.skipLinkText}>Skip this quiz</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.skipBottomRow}>
+              <TouchableOpacity onPress={() => { setPuzzleVisible(false); setPuzzleDone(true); }}>
+                <Text style={styles.skipLinkText}>Skip this quiz</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1011,6 +1100,51 @@ function QuizOption({ iconName, imageUri, selected, onPress }: { iconName: strin
   );
 }
 
+// Draggable floating bubble letter
+function DraggableBubble({ label, onDrop, tiltX, tiltY }: { label: string; onDrop: (pageX:number,pageY:number)=>Promise<boolean>; tiltX?: Animated.Value; tiltY?: Animated.Value }){
+  const base = useRef({ x: Math.random()*140 - 70, y: Math.random()*80 - 40 }).current;
+  const baseX = useRef(new Animated.Value(base.x)).current;
+  const baseY = useRef(new Animated.Value(base.y)).current;
+  const pos = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
+  const float = useRef(new Animated.Value(0)).current;
+  const vanish = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const run = Animated.loop(Animated.sequence([
+      Animated.timing(float, { toValue: 1, duration: 1600, useNativeDriver: true }),
+      Animated.timing(float, { toValue: 0, duration: 1600, useNativeDriver: true }),
+    ]));
+    run.start();
+    return () => run.stop();
+  }, [float]);
+  const panResponder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => { Haptics.selectionAsync(); },
+    onPanResponderMove: Animated.event([null, { dx: pos.x, dy: pos.y }], { useNativeDriver: false }),
+    onPanResponderRelease: async (e, gesture) => {
+      const ok = await onDrop(e.nativeEvent.pageX, e.nativeEvent.pageY);
+      if (!ok) {
+        Animated.spring(pos, { toValue: { x: 0, y: 0 }, useNativeDriver: true }).start();
+      } else {
+        // gracefully vanish to imply snap-in
+        Animated.timing(vanish, { toValue: 0, duration: 180, useNativeDriver: true }).start();
+      }
+    },
+  })).current;
+  return (
+    <Animated.View
+      {...panResponder.panHandlers}
+      style={{ margin: 8, opacity: vanish, transform: [ 
+        { translateX: Animated.add(Animated.add(baseX, pos.x), tiltX || new Animated.Value(0)) }, 
+        { translateY: Animated.add(Animated.add(Animated.add(baseY, pos.y), float.interpolate({ inputRange:[0,1], outputRange:[-3,3] })), tiltY || new Animated.Value(0)) } 
+      ] }}
+    >
+      <View style={styles.tileCell}>
+        <Text style={styles.tileText}>{label}</Text>
+      </View>
+    </Animated.View>
+  );
+}
+
 // ---------- Styles ----------
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#0b0614" },
@@ -1090,6 +1224,7 @@ const styles = StyleSheet.create({
   flashBarFill: { height: '100%', backgroundColor: '#8B5CF6' },
   shimmerWrap: { marginTop: 4, width: 180, height: 6, backgroundColor: '#ede9fe', borderRadius: 3, overflow: 'hidden' },
   shimmerBar: { width: 40, height: '100%', backgroundColor: '#c4b5fd', borderRadius: 3 },
+  skipBottomRow: { marginTop: 12, alignItems: 'center' },
   fbCard: { marginTop: 16, borderRadius: 20, padding: 16, alignItems: 'center' },
   fbGood: { backgroundColor: '#ecfeff' },
   fbTry: { backgroundColor: '#fff7ed' },
@@ -1098,13 +1233,13 @@ const styles = StyleSheet.create({
   fbText: { color: '#374151', textAlign: 'center', marginTop: 6 },
   fbBtn: { marginTop: 10, alignSelf: 'stretch' },
   // Puzzle styles
-  puzzleOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, padding: 16, justifyContent: 'flex-end' },
+  puzzleOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, padding: 16, justifyContent: 'center', alignItems: 'center' },
   puzzleSlotsRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', marginTop: 8 },
-  slotCell: { width: 36, height: 44, borderRadius: 10, marginHorizontal: 4, backgroundColor: '#f3f4f6', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#e5e7eb' },
-  slotFilled: { backgroundColor: '#eef2ff', borderColor: '#c7d2fe' },
+  slotCell: { width: 52, height: 52, borderRadius: 26, marginHorizontal: 6, backgroundColor: 'rgba(255,255,255,0.8)', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#c7d2fe' },
+  slotFilled: { backgroundColor: '#eef2ff', borderColor: '#a78bfa' },
   slotText: { fontSize: 22, fontWeight: '900', color: '#1f1147' },
-  puzzleRack: { marginTop: 14, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
-  tileCell: { width: 44, height: 52, borderRadius: 12, margin: 6, backgroundColor: '#e9d5ff', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, elevation: 3 },
+  puzzleRack: { marginTop: 16, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' },
+  tileCell: { width: 56, height: 56, borderRadius: 28, margin: 8, backgroundColor: 'rgba(233,213,255,0.95)', alignItems: 'center', justifyContent: 'center', shadowColor: '#8B5CF6', shadowOpacity: 0.4, shadowRadius: 8, elevation: 4 },
   tileText: { fontSize: 24, fontWeight: '900', color: '#1f1147' },
-  puzzleButtonsRow: { marginTop: 12, flexDirection: 'row', justifyContent: 'space-between' },
+  puzzleButtonsBottom: { position: 'absolute', left: 16, right: 16, bottom: 54, flexDirection: 'row', justifyContent: 'space-between' },
 });
