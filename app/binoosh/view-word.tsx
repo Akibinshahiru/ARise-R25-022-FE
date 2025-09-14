@@ -1,19 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
+import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Button,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 type Word = {
@@ -25,9 +25,12 @@ type Word = {
   soundClipRef?: string | null;
 };
 
+const ipAddress = process.env.API_BASE_URL;
+
 export default function ViewWordScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+
   const [wordData, setWordData] = useState<Word | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -66,7 +69,7 @@ export default function ViewWordScreen() {
 
   const fetchWords = async () => {
     try {
-      const response = await axios.get("/api/words/wc");
+      const response = await axios.get(`${ipAddress}/api/words/wc`);
       setWords(response.data.words || []);
     } catch (error: any) {
       console.error(error.response?.data || error.message);
@@ -75,12 +78,8 @@ export default function ViewWordScreen() {
   };
 
   const inputNum = Number(modalInput);
-  const lessOrEqual = words.filter(
-    (w) => !isNaN(inputNum) && w.complexity <= inputNum
-  );
-  const greater = words.filter(
-    (w) => !isNaN(inputNum) && w.complexity > inputNum
-  );
+  const lessOrEqual = words.filter((w) => !isNaN(inputNum) && w.complexity <= inputNum);
+  const greater = words.filter((w) => !isNaN(inputNum) && w.complexity > inputNum);
 
   const handleConfirm = () => {
     if (!isNaN(inputNum)) {
@@ -98,30 +97,17 @@ export default function ViewWordScreen() {
   // Update word using Axios
   const handleUpdate = async () => {
     if (!wordData) return;
-    
     if (!word || !segmented || complexity === null) {
       Alert.alert("Error", "Please fill in all required fields");
       return;
     }
-
     try {
       setSaving(true);
-      const response = await axios.put(
-        `/api/words/update/${wordData._id}`,
-        {
-          word,
-          wordSegmented: segmented,
-          complexity,
-          isPseudo,
-          soundClipRef: soundClip,
-        }
+      const response = await axios.put(`${ipAddress}/api/words/update/${wordData._id}`,
+        { word, wordSegmented: segmented, complexity, isPseudo, soundClipRef: soundClip }
       );
-
       Alert.alert("Success", `Word "${response.data.word}" updated successfully`);
-      
-      // Update local state with new data
       setWordData(response.data);
-      
     } catch (error: any) {
       console.error(error.response?.data || error.message);
       Alert.alert("Error", "Failed to update word");
@@ -137,7 +123,6 @@ export default function ViewWordScreen() {
 
   const handleDelete = async () => {
     if (!wordData) return;
-
     Alert.alert(
       "Confirm Delete",
       `Are you sure you want to delete "${wordData.word}"?`,
@@ -148,7 +133,7 @@ export default function ViewWordScreen() {
           style: "destructive",
           onPress: async () => {
             try {
-              await axios.delete(`/api/words/delete/${wordData._id}`);
+              await axios.delete(`${ipAddress}/api/words/delete/${wordData._id}`);
               Alert.alert("Success", "Word deleted successfully");
               router.back();
             } catch (error: any) {
@@ -178,68 +163,71 @@ export default function ViewWordScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#007AFF" />
+    <View style={styles.screen}>
+      {/* Decorative background blobs */}
+      <LinearGradient colors={["#FFE6A7", "#FFB3C1"] as const} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.blobTop} />
+      <LinearGradient colors={["#B5E4FF", "#D7C3FF"] as const} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={styles.blobBottom} />
+
+      {/* Brand/header row */}
+      <View style={styles.brandRow}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.iconBtn}>
+          <Ionicons name="arrow-back" size={22} color="#6C2BD9" />
         </TouchableOpacity>
-        <Text style={styles.title}>Edit Word</Text>
-        <TouchableOpacity onPress={handleDelete} style={styles.deleteButton}>
-          <Ionicons name="trash" size={24} color="#FF3B30" />
+        <Text style={styles.brand}>ARise</Text>
+        <TouchableOpacity onPress={handleDelete} style={styles.iconBtn}>
+          <Ionicons name="trash" size={22} color="#FF3B30" />
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollView}>
-        {/* Word */}
-        <TextInput
-          style={styles.input}
-          placeholder="Enter Word"
-          value={word}
-          onChangeText={setWord}
-        />
-
-        {/* Segmented Word */}
-        <TextInput
-          style={styles.input}
-          placeholder="Segmented Word (e.g., sev-en)"
-          value={segmented}
-          onChangeText={setSegmented}
-        />
-
-        {/* Complexity Picker */}
-        <TouchableOpacity onPress={handleModalPress}>
-          <TextInput
-            style={[styles.input, { color: "#111" }]}
-            placeholder="Pick Complexity"
-            value={complexity !== null ? complexity.toString() : ""}
-            editable={false}
-            pointerEvents="none"
-          />
-        </TouchableOpacity>
-
-        {/* Pseudo toggle */}
-        <View style={styles.row}>
-          <Text>Is Pseudo?</Text>
-          <Switch value={isPseudo} onValueChange={setIsPseudo} />
-        </View>
-
-        {/* Attach audio */}
-        {!isPseudo && <Button title="Attach Sound Clip" onPress={pickAudio} />}
-
-        {/* Sound clip reference (if exists) */}
-        {soundClip && (
-          <View style={styles.soundClipContainer}>
-            <Text style={styles.soundClipText}>Sound Clip: {soundClip}</Text>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        {/* Hero */}
+        <LinearGradient colors={["#7C3AED", "#4F46E5"] as const} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Edit Word</Text>
+            <Text style={styles.subtitle}>Update spelling, segmentation and level.</Text>
           </View>
-        )}
+          <View style={styles.emojiBadge}><Text style={styles.emojiText}>✏️</Text></View>
+        </LinearGradient>
 
-        {/* Save */}
-        <View style={{ marginTop: 30, marginBottom: 20 }}>
-          <Button 
-            title={saving ? "Updating..." : "Update Word"} 
-            onPress={handleUpdate} 
-            disabled={saving}
-          />
+        {/* Form */}
+        <View style={styles.formCard}>
+          <Text style={styles.label}>Word</Text>
+          <TextInput style={styles.input} placeholder="Enter Word" value={word} onChangeText={setWord} />
+
+          <Text style={styles.label}>Segmented Word</Text>
+          <TextInput style={styles.input} placeholder="e.g., sev-en" value={segmented} onChangeText={setSegmented} />
+
+          <Text style={styles.label}>Complexity</Text>
+          <TouchableOpacity onPress={handleModalPress} activeOpacity={0.9}>
+            <View pointerEvents="none">
+              <TextInput style={[styles.input, styles.inputReadonly]} placeholder="Pick Complexity" value={complexity !== null ? complexity.toString() : ""} editable={false} />
+            </View>
+          </TouchableOpacity>
+
+          <View style={[styles.row, { marginTop: 4 }]}>
+            <Text style={styles.labelInline}>Is Pseudo?</Text>
+            <Switch value={isPseudo} onValueChange={setIsPseudo} />
+          </View>
+
+          {!isPseudo && (
+            <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.9} onPress={pickAudio}>
+              <Ionicons name="musical-notes" size={18} color="#6C2BD9" />
+              <Text style={styles.secondaryBtnText}>Attach Sound Clip</Text>
+            </TouchableOpacity>
+          )}
+
+          {soundClip && (
+            <View style={styles.soundClipContainer}>
+              <Text style={styles.soundClipText}>Sound Clip: {soundClip}</Text>
+            </View>
+          )}
+
+          <TouchableOpacity style={[styles.primaryBtn, saving && { opacity: 0.7 }]} activeOpacity={0.9} onPress={handleUpdate} disabled={saving}>
+            <LinearGradient colors={["#A78BFA", "#F472B6"] as const} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.primaryBtnGradient}>
+              <Ionicons name="save" size={18} color="#fff" />
+              <Text style={styles.primaryBtnText}>{saving ? "Updating..." : "Update Word"}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -247,15 +235,12 @@ export default function ViewWordScreen() {
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            {/* Top list: ≤ complexity */}
+            <Text style={styles.modalTitle}>Pick Complexity</Text>
+            {/* Top list: <= complexity */}
             <ScrollView style={styles.list}>
-              <Text style={styles.sectionTitle}>≤ Complexity</Text>
+              <Text style={styles.sectionTitle}>{"<= Complexity"}</Text>
               {lessOrEqual.map((item) => (
-                <TouchableOpacity
-                  key={item.word}
-                  style={styles.item}
-                  onPress={() => setModalInput(item.complexity.toString())}
-                >
+                <TouchableOpacity key={item.word} style={styles.item} onPress={() => setModalInput(item.complexity.toString())}>
                   <Text>{item.word}</Text>
                   <Text>({item.complexity})</Text>
                 </TouchableOpacity>
@@ -264,17 +249,8 @@ export default function ViewWordScreen() {
 
             {/* Center: numeric input + checkmark */}
             <View style={styles.centerSection}>
-              <TextInput
-                style={styles.inputModal}
-                keyboardType="numeric"
-                placeholder="Enter complexity"
-                value={modalInput}
-                onChangeText={setModalInput}
-              />
-              <TouchableOpacity
-                style={styles.checkButton}
-                onPress={handleConfirm}
-              >
+              <TextInput style={styles.inputModal} keyboardType="numeric" placeholder="Enter complexity" value={modalInput} onChangeText={setModalInput} />
+              <TouchableOpacity style={styles.checkButton} onPress={handleConfirm}>
                 <Ionicons name="checkmark" size={28} color="white" />
               </TouchableOpacity>
             </View>
@@ -283,18 +259,16 @@ export default function ViewWordScreen() {
             <ScrollView style={styles.list}>
               <Text style={styles.sectionTitle}>{"> Complexity"}</Text>
               {greater.map((item) => (
-                <TouchableOpacity
-                  key={item.word}
-                  style={styles.item}
-                  onPress={() => setModalInput(item.complexity.toString())}
-                >
+                <TouchableOpacity key={item.word} style={styles.item} onPress={() => setModalInput(item.complexity.toString())}>
                   <Text>{item.word}</Text>
                   <Text>({item.complexity})</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
-            <Button title="Cancel" onPress={() => setModalVisible(false)} />
+            <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setModalVisible(false)}>
+              <Text style={styles.modalCloseText}>Cancel</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -303,97 +277,65 @@ export default function ViewWordScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
-  header: {
+  screen: { flex: 1, backgroundColor: "#F7F7FB" },
+  container: { padding: 20, paddingBottom: 40 },
+
+  // Decorative blobs
+  blobTop: { position: "absolute", top: -80, left: -60, width: 220, height: 220, borderRadius: 120, opacity: 0.25 },
+  blobBottom: { position: "absolute", bottom: -70, right: -60, width: 220, height: 220, borderRadius: 120, opacity: 0.25 },
+
+  brandRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 14 },
+  brand: { fontSize: 18, fontWeight: "800", color: "#111827" },
+  iconBtn: { padding: 6 },
+
+  heroCard: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-  backButton: {
-    padding: 8,
-  },
-  deleteButton: {
-    padding: 8,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  scrollView: {
-    padding: 20,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    padding: 10,
-    borderRadius: 8,
+    padding: 18,
+    borderRadius: 18,
+    marginTop: 10,
     marginBottom: 16,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
   },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  soundClipContainer: {
-    padding: 12,
-    backgroundColor: "#f5f5f5",
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  soundClipText: {
-    fontSize: 14,
-    color: "#666",
-  },
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    width: "85%",
-    maxHeight: "85%",
-    padding: 16,
-    borderRadius: 12,
-  },
+  title: { color: "#fff", fontSize: 22, fontWeight: "800", marginBottom: 4 },
+  subtitle: { color: "#E9D5FF", fontSize: 14, fontWeight: "600" },
+  emojiBadge: { width: 56, height: 56, borderRadius: 28, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center", marginLeft: 12 },
+  emojiText: { fontSize: 26 },
+
+  formCard: { backgroundColor: "#ffffff", borderRadius: 16, padding: 16, gap: 8, shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
+  label: { fontSize: 13, fontWeight: "800", color: "#374151" },
+  labelInline: { fontSize: 14, fontWeight: "800", color: "#374151" },
+  input: { backgroundColor: "#F9FAFB", borderWidth: 1, borderColor: "#E5E7EB", paddingVertical: 12, paddingHorizontal: 12, borderRadius: 12, fontSize: 15 },
+  inputReadonly: { color: "#111" },
+  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+
+  secondaryBtn: { marginTop: 8, backgroundColor: "#F3E8FF", borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, alignItems: "center", flexDirection: "row", gap: 8 },
+  secondaryBtnText: { color: "#6C2BD9", fontSize: 14, fontWeight: "800" },
+
+  primaryBtn: { marginTop: 12, borderRadius: 14, overflow: "hidden" },
+  primaryBtnGradient: { height: 50, borderRadius: 14, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 },
+  primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
+
+  soundClipContainer: { padding: 12, backgroundColor: "#F3F4F6", borderRadius: 12, marginTop: 8 },
+  soundClipText: { fontSize: 14, color: "#374151" },
+
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+
+  // Modal
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+  modalContent: { backgroundColor: "#fff", width: "90%", maxHeight: "85%", padding: 16, borderRadius: 16 },
+  modalTitle: { fontSize: 16, fontWeight: "800", marginBottom: 6, color: "#111827" },
   list: { maxHeight: 150, marginVertical: 8 },
-  sectionTitle: { fontWeight: "bold", marginBottom: 6 },
-  item: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderColor: "#eee",
-  },
-  centerSection: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    marginVertical: 12,
-  },
-  inputModal: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    padding: 10,
-    flex: 1,
-    marginRight: 10,
-  },
-  checkButton: {
-    backgroundColor: "#3b82f6",
-    borderRadius: 8,
-    padding: 10,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  sectionTitle: { fontWeight: "800", marginBottom: 6, color: "#374151" },
+  item: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 8, borderBottomWidth: 1, borderColor: "#F3F4F6" },
+  centerSection: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginVertical: 12 },
+  inputModal: { borderWidth: 1, borderColor: "#E5E7EB", backgroundColor: "#F9FAFB", borderRadius: 10, padding: 10, flex: 1, marginRight: 10 },
+  checkButton: { backgroundColor: "#7C3AED", borderRadius: 10, padding: 10, justifyContent: "center", alignItems: "center" },
+  modalCloseBtn: { marginTop: 8, alignSelf: "flex-end", backgroundColor: "#F3F4F6", paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10 },
+  modalCloseText: { fontWeight: "800", color: "#374151" },
 });
+

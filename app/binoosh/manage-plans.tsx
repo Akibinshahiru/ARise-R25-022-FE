@@ -1,51 +1,98 @@
 // app/binoosh/manage-plans.tsx
 import { useRouter } from "expo-router";
 import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
+import type { ColorValue } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View, ScrollView } from "react-native";
 
 export default function ManagePlansScreen() {
   const router = useRouter();
 
   return (
-    <View style={styles.container}>
-      {/* Create Plan */}
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => router.push("/binoosh/create-plan")}
-      >
-        <Text style={styles.buttonText}>Create Plan</Text>
-      </TouchableOpacity>
+    <View style={styles.screen}>
+      {/* Background decorative blobs */}
+      <LinearGradient colors={["#FFE6A7", "#FFB3C1"] as const} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.blobTop} />
+      <LinearGradient colors={["#B5E4FF", "#D7C3FF"] as const} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={styles.blobBottom} />
 
-      {/* View Plans */}
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => router.push("/binoosh/view-plans")}
-      >
-        <Text style={styles.buttonText}>View Plans</Text>
-      </TouchableOpacity>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        {/* Brand row */}
+        <View style={styles.brandRow}>
+          <Text style={styles.brand}>ARise</Text>
+          <Ionicons name="calendar" size={22} color="#6C2BD9" />
+        </View>
+
+        {/* Hero card */}
+        <LinearGradient colors={["#7C3AED", "#4F46E5"] as const} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Manage Plans</Text>
+            <Text style={styles.subtitle}>Create learning plans or view existing ones.</Text>
+          </View>
+          <View style={styles.emojiBadge}><Text style={styles.emojiText}>🗓️</Text></View>
+        </LinearGradient>
+
+        {/* Quick actions */}
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <View style={styles.grid}>
+          <ActionTile
+            colors={["#34D399", "#10B981"] as const}
+            icon="add-circle"
+            label="Create Plan"
+            onPress={() => router.push("/binoosh/create-plan")}
+          />
+          <ActionTile
+            colors={["#60A5FA", "#3B82F6"] as const}
+            icon="list"
+            label="View Plans"
+            onPress={() => router.push("/binoosh/view-plans")}
+          />
+        </View>
+      </ScrollView>
     </View>
   );
 }
 
+type ActionTileProps = {
+  colors: readonly [ColorValue, ColorValue, ...ColorValue[]];
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+};
+
+function ActionTile({ colors, icon, label, onPress }: ActionTileProps) {
+  return (
+    <TouchableOpacity style={styles.tileWrap} activeOpacity={0.9} onPress={onPress}>
+      <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.tile}>
+        <View style={styles.tileIconWrap}>
+          <Ionicons name={icon as any} size={28} color="#ffffff" />
+        </View>
+        <Text style={styles.tileText}>{label}</Text>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center", // vertically center
-    alignItems: "center", // horizontally center
-    padding: 20,
-    backgroundColor: "#fff",
-    gap: 20,
-  },
-  button: {
-    width: "80%",
-    padding: 20,
-    borderRadius: 12,
-    backgroundColor: "#3b82f6",
-    alignItems: "center",
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
+  screen: { flex: 1, backgroundColor: "#F7F7FB" },
+  container: { padding: 20, paddingBottom: 40 },
+
+  // Decorative blobs
+  blobTop: { position: "absolute", top: -80, left: -60, width: 220, height: 220, borderRadius: 120, opacity: 0.25 },
+  blobBottom: { position: "absolute", bottom: -70, right: -60, width: 220, height: 220, borderRadius: 120, opacity: 0.25 },
+
+  brandRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  brand: { fontSize: 22, fontWeight: "800", color: "#111827", letterSpacing: 0.5 },
+
+  heroCard: { flexDirection: "row", alignItems: "center", padding: 18, borderRadius: 18, marginBottom: 18, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
+  title: { color: "#fff", fontSize: 22, fontWeight: "800", marginBottom: 4 },
+  subtitle: { color: "#E9D5FF", fontSize: 14, fontWeight: "600" },
+  emojiBadge: { width: 56, height: 56, borderRadius: 28, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center", marginLeft: 12 },
+  emojiText: { fontSize: 26 },
+
+  sectionTitle: { fontSize: 18, fontWeight: "800", color: "#111827", marginBottom: 12 },
+  grid: { flexDirection: "row", justifyContent: "space-between" },
+  tileWrap: { width: "48%" },
+  tile: { height: 110, borderRadius: 18, padding: 14, justifyContent: "space-between", shadowColor: "#000", shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 4 },
+  tileIconWrap: { width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.25)", alignItems: "center", justifyContent: "center" },
+  tileText: { color: "#fff", fontSize: 16, fontWeight: "800" },
 });
