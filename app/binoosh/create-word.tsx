@@ -1,7 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
+import { Audio } from "expo-av";
+import * as DocumentPicker from "expo-document-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Modal,
@@ -16,19 +18,29 @@ import {
 
 const ipAddress = process.env.API_BASE_URL;
 
+// ---- Types ----
+type WordItem = { word: string; complexity: number };
+type SoundClip = { uri: string; name: string; size?: number; mimeType?: string };
+
 export default function CreateWordScreen() {
   const [word, setWord] = useState("");
   const [segmented, setSegmented] = useState("");
   const [complexity, setComplexity] = useState<number | null>(null);
   const [isPseudo, setIsPseudo] = useState(false);
-  const [soundClip, setSoundClip] = useState<any | null>(null);
 
+  // Mocked audio state
+  const [soundClip, setSoundClip] = useState<SoundClip | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  // Modal state
   const [modalVisible, setModalVisible] = useState(false);
   const [modalInput, setModalInput] = useState<string>("");
 
-  // Words fetched from API
-  const [words, setWords] = useState<{ word: string; complexity: number }[]>([]);
-
+  // Words fetched from API (for complexity picker)
+  const [words, setWords] = useState<WordItem[]>([]);
   const fetchWords = async () => {
     try {
       const response = await axios.get(`${ipAddress}/api/words/wc`);
@@ -38,12 +50,11 @@ export default function CreateWordScreen() {
       Alert.alert("Error", "Failed to load words for complexity picker");
     }
   };
-
-  // Fetch words from API
   useEffect(() => {
     fetchWords();
   }, []);
 
+  // Derived lists for modal
   const inputNum = Number(modalInput);
   const lessOrEqual = words.filter((w) => !isNaN(inputNum) && w.complexity <= inputNum);
   const greater = words.filter((w) => !isNaN(inputNum) && w.complexity > inputNum);
@@ -57,14 +68,111 @@ export default function CreateWordScreen() {
     }
   };
 
-  const pickAudio = () => {
-    alert("Pick audio not implemented yet");
+  // --------- MOCK AUDIO: pick + fake upload + preview ----------
+  const pickAudio = async () => {
+    try {
+      // pick local audio
+      const res = await DocumentPicker.getDocumentAsync({
+        type: "audio/*",
+        multiple: false,
+        copyToCacheDirectory: true,
+      });
+      if (res.canceled) return;
+
+      const asset = (res.assets && res.assets[0]) || (res as any);
+      const clip: SoundClip = {
+        uri: asset.uri,
+        name: asset.name || "audio.mp3",
+        size: asset.size,
+        mimeType: asset.mimeType || "audio/mpeg",
+      };
+
+      // set UI state
+      setSoundClip(clip);
+      setIsUploading(true);
+      setUploadProgress(0);
+
+      // simulate upload progress
+      const timer = setInterval(() => {
+        setUploadProgress((p) => {
+          if (p >= 100) {
+            clearInterval(timer);
+            setIsUploading(false);
+            return 100;
+          }
+          return p + 5; // ~1s total at 50ms interval
+        });
+      }, 50);
+    } catch (e: any) {
+      console.log(e);
+      Alert.alert("Audio", "Unable to pick audio right now.");
+    }
   };
 
-  // Save word using Axios
+  const unloadSound = async () => {
+    try {
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync();
+      }
+    } catch {}
+    soundRef.current = null;
+    setIsPlaying(false);
+  };
+
+  useEffect(() => {
+    // unload any existing sound when clip changes or on unmount
+    return () => {
+      unloadSound();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [soundClip?.uri]);
+
+  const togglePlay = async () => {
+    if (!soundClip) return;
+    if (!soundRef.current) {
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+      const s = new Audio.Sound();
+      await s.loadAsync({ uri: soundClip.uri }, { shouldPlay: true });
+      s.setOnPlaybackStatusUpdate((status) => {
+        if (!status.isLoaded) return;
+        setIsPlaying(!!status.isPlaying);
+      });
+      soundRef.current = s;
+      return;
+    }
+    const status = await soundRef.current.getStatusAsync();
+    if ("isLoaded" in status && status.isLoaded) {
+      if (status.isPlaying) {
+        await soundRef.current.pauseAsync();
+      } else {
+        await soundRef.current.playAsync();
+      }
+    }
+  };
+
+  const removeAudio = async () => {
+    await unloadSound();
+    setSoundClip(null);
+    setUploadProgress(0);
+    setIsUploading(false);
+  };
+
+  // If toggled to pseudo, clear audio (since you said no audio for pseudo)
+  useEffect(() => {
+    if (isPseudo && soundClip) {
+      removeAudio();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPseudo]);
+
+  // Save word (no audio upload!)
   const handleSave = async () => {
     if (!word || !segmented || complexity === null) {
       Alert.alert("Error", "Please fill in all required fields");
+      return;
+    }
+    if (isUploading) {
+      Alert.alert("Hold on", "Please wait for the mock upload to finish.");
       return;
     }
 
@@ -74,16 +182,22 @@ export default function CreateWordScreen() {
         wordSegmented: segmented,
         complexity,
         isPseudo,
+        // NOTE: We do NOT send audio — this is a mock.
+        // If you want to *show* sending something, you could send filename only:
+        attachedAudioName: soundClip?.name ?? null,
       });
 
-      Alert.alert("Success", `Word "${response.data.word}" saved successfully`);
+      Alert.alert(
+        "Success",
+        `Word "${response.data.word}" saved successfully${soundClip ? " (audio attached locally)" : ""}`
+      );
 
       // Reset form
       setWord("");
       setSegmented("");
       setComplexity(null);
       setIsPseudo(false);
-      setSoundClip(null);
+      await removeAudio();
     } catch (error: any) {
       console.error(error.response?.data || error.message);
       Alert.alert("Error", "Failed to save word");
@@ -174,16 +288,69 @@ export default function CreateWordScreen() {
             <Switch value={isPseudo} onValueChange={setIsPseudo} />
           </View>
 
-          {/* Attach audio */}
+          {/* Attach audio (mocked) */}
           {!isPseudo && (
-            <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.9} onPress={pickAudio}>
-              <Ionicons name="musical-notes" size={18} color="#6C2BD9" />
-              <Text style={styles.secondaryBtnText}>Attach Sound Clip</Text>
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity style={styles.secondaryBtn} activeOpacity={0.9} onPress={pickAudio}>
+                <Ionicons name="musical-notes" size={18} color="#6C2BD9" />
+                <Text style={styles.secondaryBtnText}>
+                  {soundClip ? "Change Sound Clip" : "Attach Sound Clip"}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Upload progress bar */}
+              {soundClip && (
+                <View style={styles.uploadCard}>
+                  <View style={styles.uploadRow}>
+                    <Ionicons name="musical-note" size={18} color="#6C2BD9" />
+                    <Text style={styles.uploadName} numberOfLines={1}>
+                      {soundClip.name}
+                    </Text>
+                    {isUploading ? (
+                      <Text style={styles.uploadTiny}>Uploading… {uploadProgress}%</Text>
+                    ) : (
+                      <View style={styles.badgeDone}>
+                        <Ionicons name="checkmark" size={14} color="#fff" />
+                        <Text style={styles.badgeDoneText}>Ready</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Progress bar visual */}
+                  <View style={styles.progressTrack}>
+                    <View style={[styles.progressFill, { width: `${uploadProgress}%` }]} />
+                  </View>
+
+                  <View style={styles.audioActions}>
+                    <TouchableOpacity
+                      onPress={togglePlay}
+                      style={[styles.actionBtn, isUploading && { opacity: 0.6 }]}
+                      disabled={isUploading}
+                    >
+                      <Ionicons name={isPlaying ? "pause" : "play"} size={18} color="#111827" />
+                      <Text style={styles.actionBtnText}>{isPlaying ? "Pause" : "Preview"}</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={removeAudio}
+                      style={[styles.actionBtn, { backgroundColor: "#FEE2E2" }]}
+                    >
+                      <Ionicons name="trash" size={18} color="#991B1B" />
+                      <Text style={[styles.actionBtnText, { color: "#991B1B" }]}>Remove</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </>
           )}
 
           {/* Save */}
-          <TouchableOpacity style={styles.primaryBtn} activeOpacity={0.9} onPress={handleSave}>
+          <TouchableOpacity
+            style={[styles.primaryBtn, isUploading && { opacity: 0.6 }]}
+            activeOpacity={0.9}
+            onPress={handleSave}
+            disabled={isUploading}
+          >
             <LinearGradient
               colors={["#A78BFA", "#F472B6"] as const}
               start={{ x: 0, y: 0 }}
@@ -198,16 +365,16 @@ export default function CreateWordScreen() {
       </ScrollView>
 
       {/* Complexity Modal */}
-      <Modal visible={modalVisible} animationType="slide" transparent={true}>
+      <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Pick Complexity</Text>
-            {/* Top list: <= complexity */}
+
             <ScrollView style={styles.list}>
               <Text style={styles.sectionTitle}>{"<= Complexity"}</Text>
               {lessOrEqual.map((item) => (
                 <TouchableOpacity
-                  key={item.word}
+                  key={`${item.word}-${item.complexity}`}
                   style={styles.item}
                   onPress={() => setModalInput(item.complexity.toString())}
                 >
@@ -217,7 +384,6 @@ export default function CreateWordScreen() {
               ))}
             </ScrollView>
 
-            {/* Center: numeric input + checkmark */}
             <View style={styles.centerSection}>
               <TextInput
                 style={styles.inputModal}
@@ -231,12 +397,11 @@ export default function CreateWordScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Bottom list: > complexity */}
             <ScrollView style={styles.list}>
               <Text style={styles.sectionTitle}>{"> Complexity"}</Text>
               {greater.map((item) => (
                 <TouchableOpacity
-                  key={item.word}
+                  key={`${item.word}-${item.complexity}-gt`}
                   style={styles.item}
                   onPress={() => setModalInput(item.complexity.toString())}
                 >
@@ -280,11 +445,7 @@ const styles = StyleSheet.create({
     opacity: 0.25,
   },
 
-  brandRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
+  brandRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   brand: { fontSize: 22, fontWeight: "800", color: "#111827" },
 
   heroCard: {
@@ -360,6 +521,51 @@ const styles = StyleSheet.create({
   },
   secondaryBtnText: { color: "#6C2BD9", fontSize: 14, fontWeight: "800" },
 
+  // Upload/preview UI
+  uploadCard: {
+    marginTop: 8,
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    padding: 12,
+    gap: 8,
+  },
+  uploadRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  uploadName: { flex: 1, fontWeight: "700", color: "#111827" },
+  uploadTiny: { fontSize: 12, color: "#6B7280", fontWeight: "700" },
+  progressTrack: {
+    height: 8,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: 8,
+    backgroundColor: "#7C3AED",
+  },
+  audioActions: { flexDirection: "row", gap: 8, marginTop: 4 },
+  actionBtn: {
+    flexDirection: "row",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: "#EEF2FF",
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  actionBtnText: { fontWeight: "800", color: "#111827" },
+  badgeDone: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#10B981",
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+  },
+  badgeDoneText: { color: "#fff", fontSize: 12, fontWeight: "800" },
+
   // Modal
   modalOverlay: {
     flex: 1,
@@ -411,4 +617,3 @@ const styles = StyleSheet.create({
   },
   modalCloseText: { fontWeight: "800", color: "#374151" },
 });
-

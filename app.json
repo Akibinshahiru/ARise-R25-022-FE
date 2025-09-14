@@ -37,6 +37,9 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "EXPO_PUBLIC_PRONUN_BASE": "http://0.0.0.0:8002"
     }
   }
 }

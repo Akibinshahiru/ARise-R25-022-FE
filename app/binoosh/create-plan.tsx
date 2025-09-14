@@ -37,7 +37,6 @@ export default function CreatePlanScreen() {
   const [selectedWords, setSelectedWords] = useState<string[]>([]);
   const [selectedPseudo, setSelectedPseudo] = useState<string | null>(null);
   const [recordEmotions, setRecordEmotions] = useState(false);
-console.log(recordEmotions);
 
   // Modal controls
   const [wordModalVisible, setWordModalVisible] = useState(false);
@@ -131,7 +130,6 @@ console.log(recordEmotions);
     };
 
     try {
-      console.log(payload);
       
       await axios.post(`${ipAddress}/api/challenges`, payload);
       alert("Plan created successfully!");

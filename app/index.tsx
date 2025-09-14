@@ -6,7 +6,8 @@ const members = [
   { name: "Akila", path: "/akila/dashboard", colors: ["#4f46e5", "#6366f1"] },
   {
     name: "Phonological Dyslexia",
-    path: "/binoosh/view-challenges",
+    path: "/binoosh/dashboard",
+    // path: "/binoosh/view-challenges",
     colors: ["#ec4899", "#f472b6"],
   },
   {

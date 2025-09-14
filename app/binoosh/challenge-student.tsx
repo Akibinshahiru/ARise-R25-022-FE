@@ -6,24 +6,24 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Platform,
-  Pressable,
-  SafeAreaView,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Platform,
+    Pressable,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import ConfettiCannon from "react-native-confetti-cannon";
 
-// 🔐 Environment
-const API_BASE = process.env.API_BASE_URL as string;                     // your Express API (challenges/scores)
-const MEDIA_BASE = process.env.EXPO_PUBLIC_MEDIA_BASE as string;         // (kept if you still use it elsewhere)
-const PRONUN_BASE = 'http://192.168.43.137:8002'
-const Image = null;
+// 🔐 Environment / Endpoints
+const API_BASE = process.env.API_BASE_URL as string;               // your Express API (challenges/scores)
+const MEDIA_BASE = process.env.EXPO_PUBLIC_MEDIA_BASE as string;   // (kept if you still use it elsewhere)
+const PRONUN_BASE = "http://192.168.43.137:8002";                  // FastAPI host for both pronunciation & emotion
+
 // 🧩 Types
 export type Word = {
   _id: string;
@@ -56,7 +56,7 @@ export type ScoreBody = {
   challengeId: string;
   levelScores: LevelScore[]; // normal rounds only
   pseudowordRecording?: any; // file from RN FormData (for backend to upload to Firebase)
-  emotion?: string;          // optional, mocked if recordEmotion = true
+  emotion?: string;          // set from FastAPI emotion endpoint if recordEmotion = true
 };
 
 // 🏅 Medal helpers
@@ -70,7 +70,7 @@ const timeScore = (seconds: number) => {
   return Math.max(0, 100 - over * 10);
 };
 
-// 🧮 Final score
+// 🧮 Final score (accuracy 0..1 from API)
 const finalScore = (accuracy01: number, seconds: number, hintTaken: boolean) => {
   const ts = timeScore(seconds);
   const hintFactor = hintTaken ? 0.5 : 1;
@@ -92,12 +92,13 @@ function guessMimeFromUri(uri: string): string {
   if (lower.endsWith(".caf")) return "audio/x-caf";
   if (lower.endsWith(".3gp") || lower.endsWith(".3gpp")) return "audio/3gpp";
   if (lower.endsWith(".wav")) return "audio/wav";
-  return Platform.OS === "ios" ? "audio/m4a" : "audio/3gpp"; // best guesses
+  // default best guesses
+  return Platform.OS === "ios" ? "audio/m4a" : "audio/3gpp";
 }
 
-function filenameFromUri(uri: string, fallback = `recording_${Date.now()}`) {
+function filenameFromUri(uri: string, fallback = `file_${Date.now()}`) {
   const last = uri.split("/").pop();
-  return last || `${fallback}.m4a`;
+  return last || `${fallback}`;
 }
 
 // 🔊 Play a hint clip using expo-av
@@ -142,10 +143,7 @@ type PronunAPIResponse = {
 };
 
 async function evaluatePronunciation(localUri: string, targetWord: string): Promise<PronunAPIResponse> {
-  if (!PRONUN_BASE) {
-    throw new Error("Missing EXPO_PUBLIC_PRONUN_BASE in env.");
-  }
-  const fileName = filenameFromUri(localUri);
+  const fileName = filenameFromUri(localUri, `recording_${Date.now()}.m4a`);
   const type = guessMimeFromUri(localUri);
 
   const form = new FormData();
@@ -161,20 +159,62 @@ async function evaluatePronunciation(localUri: string, targetWord: string): Prom
 
   const res = await fetch(`${PRONUN_BASE}/check-pronunciation/`, {
     method: "POST",
-    body: form, // do NOT set Content-Type header; RN sets boundary automatically
+    body: form, // RN sets multipart boundary automatically
   });
 
-  const text = await res.text(); // helpful to debug malformed JSON
+  const text = await res.text(); // great for debugging if JSON parse fails
   let json: any;
   try {
     json = JSON.parse(text);
-  } catch (e) {
+  } catch {
     throw new Error(`Pronunciation API returned non-JSON: ${text}`);
   }
   if (!res.ok) {
     throw new Error(json?.error || `Pronunciation API error ${res.status}`);
   }
   return json as PronunAPIResponse;
+}
+
+// --- REAL: emotion detector via FastAPI (photo upload) ---
+async function detectEmotionFromPhoto(localUri: string): Promise<string> {
+  const name = filenameFromUri(localUri, `emotion_${Date.now()}.jpg`);
+  // Most Expo camera photos are JPEG
+  const form = new FormData();
+  form.append(
+    "image",
+    {
+      uri: localUri,
+      name,
+      type: "image/jpeg",
+    } as any
+  );
+
+  const res = await fetch(`${PRONUN_BASE}/predict-emotion/`, {
+    method: "POST",
+    body: form,
+  });
+
+  const text = await res.text();
+  let json: any;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new Error(`Emotion API returned non-JSON: ${text}`);
+  }
+  if (!res.ok) {
+    throw new Error(json?.error || `Emotion API error ${res.status}`);
+  }
+
+  // Be flexible with field names coming back
+  const label =
+    json.emotion ||
+    json.label ||
+    json.prediction ||
+    json.result ||
+    json.class ||
+    json?.data?.emotion;
+
+  return (label || "Neutral").toString();
 }
 
 export default function ChallengeGameScreen() {
@@ -208,7 +248,7 @@ export default function ChallengeGameScreen() {
     medal: "bronze" | "silver" | "gold";
   } | null>(null);
 
-  // camera for (mock) emotion
+  // camera for emotion
   const [camPerm, requestCamPerm] = useCameraPermissions();
   const [camVisible, setCamVisible] = useState(false);
   const camRef = useRef<any>(null);
@@ -314,18 +354,21 @@ export default function ChallengeGameScreen() {
     }
   }, []);
 
-  const onMicPressOut = useCallback(async () => {
-    if (!recording || !currentWord) return;
-    try {
-      const uri = await stopRecording(recording);
-      setRecording(null);
-      await onEvaluate(uri, currentWord);
-    } catch (e) {
-      Alert.alert("Recording error", String(e));
-    }
-  }, [recording, currentWord]);
+  const onMicPressOut = useCallback(
+    async () => {
+      if (!recording || !currentWord) return;
+      try {
+        const uri = await stopRecording(recording);
+        setRecording(null);
+        await onEvaluate(uri, currentWord);
+      } catch (e) {
+        Alert.alert("Recording error", String(e));
+      }
+    },
+    [recording, currentWord]
+  );
 
-  // 🧪 Evaluate & show immediate result (NOW calling FastAPI)
+  // 🧪 Evaluate & show immediate result (calling FastAPI)
   const onEvaluate = useCallback(
     async (localUri: string, wordObj: Word) => {
       const elapsed = 20 - seconds;
@@ -412,7 +455,7 @@ export default function ChallengeGameScreen() {
     }
   }, [started, allNormalRoundsDone, pseudoSubmitted, pseudoStartTs]);
 
-  // Submit to your backend (multipart with audio file)
+  // Submit to your backend (multipart with audio file for pseudoword)
   const finishAndSubmit = useCallback(
     async (pseudoUri?: string) => {
       if (!challenge) return;
@@ -420,13 +463,10 @@ export default function ChallengeGameScreen() {
         const form = new FormData();
         form.append("challengeId", challenge._id);
         form.append("levelScores", JSON.stringify(levelScores));
-
-        const GET_EMOTION = 'http://192.168.43.137:8002/predict-emotion/';
-
         if (emotion) form.append("emotion", emotion);
 
         if (pseudoUri) {
-          const name = filenameFromUri(pseudoUri, `pseudo_${Date.now()}`);
+          const name = filenameFromUri(pseudoUri, `pseudo_${Date.now()}.m4a`);
           const type = guessMimeFromUri(pseudoUri);
           form.append("pseudowordRecording", { uri: pseudoUri, type, name } as any);
         }
@@ -476,9 +516,11 @@ export default function ChallengeGameScreen() {
         setPseudoRecording(null);
       }
 
-      // mock emotion if required
-      const emo = challenge?.recordEmotion ? "Neutral" : undefined;
-      setEmotion(emo);
+      // if emotion recording required, open camera (user taps capture)
+      if (challenge?.recordEmotion) {
+        if (!camPerm?.granted) await requestCamPerm();
+        setCamVisible(true);
+      }
 
       setPseudoSubmitted(true);
       await finishAndSubmit(uri);
@@ -489,7 +531,7 @@ export default function ChallengeGameScreen() {
     } finally {
       setUploading(false);
     }
-  }, [pseudoRecording, pseudoLastUri, pseudoSubmitted, finishAndSubmit, challenge?.recordEmotion]);
+  }, [pseudoRecording, pseudoLastUri, pseudoSubmitted, finishAndSubmit, challenge?.recordEmotion, camPerm?.granted, requestCamPerm]);
 
   // 🎤 Pseudoword press & hold mic
   const onPseudoMicPressIn = useCallback(async () => {
@@ -517,12 +559,28 @@ export default function ChallengeGameScreen() {
       if (!camPerm?.granted) await requestCamPerm();
       setCamVisible(true);
     }
-  }, [challenge?.recordEmotion, camPerm?.granted]);
+  }, [challenge?.recordEmotion, camPerm?.granted, requestCamPerm]);
 
+  // 📸 Take a photo and call FastAPI to detect emotion
   const captureEmotion = useCallback(async () => {
-    // MOCK: set a static value; real model can replace this later
-    setEmotion("Neutral");
-    setCamVisible(false);
+    try {
+      if (!camRef.current) throw new Error("Camera not ready");
+      // takePictureAsync on CameraView
+      const photo = await camRef.current.takePictureAsync({
+        quality: 0.6,
+        skipProcessing: true,
+      });
+      const uri = photo?.uri;
+      if (!uri) throw new Error("No photo URI from camera");
+
+      const label = await detectEmotionFromPhoto(uri);
+      setEmotion(label);
+      setCamVisible(false);
+      Alert.alert("Emotion detected", `Detected: ${label}`);
+    } catch (e: any) {
+      setCamVisible(false);
+      Alert.alert("Emotion error", e?.message || "Unable to detect emotion");
+    }
   }, []);
 
   // 🧾 Final averages (normal rounds only)
@@ -615,7 +673,6 @@ export default function ChallengeGameScreen() {
                 <Text style={[styles.medal, styles[`medal_${roundResult.medal}` as const]]}>
                   {roundResult.medal.toUpperCase()}
                 </Text>
-                {/* Confetti trigger via useEffect to avoid returning void in JSX */}
                 <TouchableOpacity
                   style={styles.primaryBtn}
                   onPress={() => {
@@ -688,7 +745,7 @@ export default function ChallengeGameScreen() {
         )}
       </ScrollView>
 
-      {/* Emotion camera modal (MOCK: sets Neutral) */}
+      {/* Emotion camera modal */}
       {camVisible && (
         <View style={styles.camModal}>
           <CameraView ref={camRef} style={styles.cam} facing="front" />
