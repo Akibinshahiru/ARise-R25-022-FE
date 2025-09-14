@@ -20,7 +20,11 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "permissions": ["CAMERA"]
+      "permissions": [
+        "CAMERA",
+        "CAMERA"
+      ],
+      "package": "com.anonymous.ARiseR25022FE"
     },
     "web": {
       "bundler": "metro",

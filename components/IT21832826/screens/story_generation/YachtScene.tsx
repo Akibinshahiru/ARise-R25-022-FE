@@ -1,19 +1,16 @@
 import { Asset } from "expo-asset";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { GLView } from "expo-gl";
+import * as Linking from "expo-linking";
 import { Renderer } from "expo-three";
+import * as WebBrowser from "expo-web-browser";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import {
-  PanResponder,
-  PanResponderGestureState,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import * as THREE from "three";
+import { Object3D, PerspectiveCamera } from "three";
 import { DRACOLoader, GLTFLoader } from "three-stdlib";
 
-type Props = { query?: string };
+type Props = { query?: string; /** Supabase public/signed URL to yacht.glb */ arModelUrl?: string; arTitle?: string };
 
 // 1) Local bundled yacht model (ensure this path exists)
 const LOCAL_MODELS: Record<string, number> = {
@@ -37,28 +34,61 @@ function findFreeModel(query: string) {
   );
 }
 
-export default function ARThreeOverlay({ query = "yacht" }: Props) {
+/** ---------- Scene Viewer helpers (Android) + Quick Look (iOS optional) ---------- */
+function buildSceneViewerIntent(glbUrl: string, title = "Yacht") {
+  // A web fallback in case Scene Viewer isn't available
+  const web = `https://arvr.google.com/scene-viewer/1.0?file=${encodeURIComponent(glbUrl)}&mode=ar_preferred&title=${encodeURIComponent(
+    title
+  )}&resizable=true`;
+  // Android intent URI to launch Scene Viewer with ARCore
+  return `intent://arvr.google.com/scene-viewer/1.0?file=${encodeURIComponent(
+    glbUrl
+  )}&mode=ar_preferred&title=${encodeURIComponent(
+    title
+  )}#Intent;scheme=https;package=com.google.ar.core;action=android.intent.action.VIEW;S.browser_fallback_url=${encodeURIComponent(
+    web
+  )};end;`;
+}
+
+async function openARPlacement(glbUrl: string, title = "Yacht") {
+  if (Platform.OS === "android") {
+    const intent = buildSceneViewerIntent(glbUrl, title);
+    try {
+      await Linking.openURL(intent);
+    } catch {
+      const fallback = `https://arvr.google.com/scene-viewer/1.0?file=${encodeURIComponent(glbUrl)}&mode=ar_preferred&title=${encodeURIComponent(
+        title
+      )}`;
+      await WebBrowser.openBrowserAsync(fallback);
+    }
+  } else {
+    // iOS: if you also host USDZ, Quick Look is best. Otherwise open 3D web fallback.
+    const usdz = process.env.EXPO_PUBLIC_SUPABASE_YACHT_USDZ_URL;
+    if (usdz) {
+      try {
+        await Linking.openURL(usdz); // Quick Look will present AR
+        return;
+      } catch {}
+    }
+    // Fallback: open a basic 3D viewer (no AR anchoring)
+    await WebBrowser.openBrowserAsync(
+      `https://arvr.google.com/scene-viewer/1.0?file=${encodeURIComponent(glbUrl)}&title=${encodeURIComponent(title)}`
+    );
+  }
+}
+
+export default function YachtScene({ query = "yacht", arModelUrl, arTitle = "ARise Yacht" }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
   const [debug, setDebug] = useState("Initializing…");
   const [modelLoaded, setModelLoaded] = useState(false);
 
+  // Supabase public/signed GLB URL from prop or .env
+  const SUPABASE_GLB_URL =
+    arModelUrl || (process.env.EXPO_PUBLIC_SUPABASE_YACHT_GLB_URL as string) || "";
+
   const glRef = useRef<any>(null);
+  const cameraRef = useRef<typeof PerspectiveCamera | null>(null); // ✅ inline type
   const rendererRef = useRef<Renderer | null>(null);
-  const cameraRef = useRef<typeof THREE.PerspectiveCamera | null>(null);
-  const groupRef = useRef<typeof THREE.Group | null>(null);
-
-  // Rotation + inertia
-  const yawVelRef = useRef(0);           // rad per frame (inertial)
-  const autoSpinRef = useRef(0.007);     // baseline idle spin
-  const pitchRef = useRef(0);            // tilt up/down (rad)
-  const scaleRef = useRef(1);            // current scale
-
-  // Gesture state
-  const gestureModeRef = useRef<"none" | "drag" | "two">("none");
-  const lastTouchesRef = useRef<{ x: number; y: number }[]>([]);
-  const lastDistanceRef = useRef<number | null>(null);
-  const lastAngleRef = useRef<number | null>(null);
-  const lastCenterRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!permission?.granted) requestPermission();
@@ -112,7 +142,8 @@ export default function ARThreeOverlay({ query = "yacht" }: Props) {
     return group;
   }, []);
 
-  async function loadLocalGLB(loader: any, moduleId: number): Promise<typeof THREE.Object3D> {
+  // ✅ Avoid `GLTFLoader` as a type; just use runtime value & inline return type
+  async function loadLocalGLB(loader: any, moduleId: number): Promise<typeof Object3D> {
     const asset = Asset.fromModule(moduleId);
     if (!asset.localUri) await asset.downloadAsync();
     const uri = asset.localUri || asset.uri;
@@ -127,7 +158,7 @@ export default function ARThreeOverlay({ query = "yacht" }: Props) {
       loader.load(
         uri,
         (gltf: any) => {
-          const root = (gltf.scene || gltf.scenes?.[0]) as typeof THREE.Object3D | undefined;
+          const root: typeof Object3D | undefined = gltf.scene || gltf.scenes?.[0];
           if (!root) return reject(new Error("No scene in GLB"));
           resolve(root);
         },
@@ -137,7 +168,7 @@ export default function ARThreeOverlay({ query = "yacht" }: Props) {
     });
   }
 
-  async function loadRemoteGLB(loader: any, url: string): Promise<typeof THREE.Object3D> {
+  async function loadRemoteGLB(loader: any, url: string): Promise<typeof Object3D> {
     const draco = new DRACOLoader();
     draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.6/");
     draco.setDecoderConfig({ type: "js" });
@@ -150,7 +181,7 @@ export default function ARThreeOverlay({ query = "yacht" }: Props) {
       loader.load(
         url,
         (gltf: any) => {
-          const root = (gltf.scene || gltf.scenes?.[0]) as typeof THREE.Object3D | undefined;
+          const root: typeof Object3D | undefined = gltf.scene || gltf.scenes?.[0];
           if (!root) return reject(new Error("No scene in GLB"));
           resolve(root);
         },
@@ -185,22 +216,25 @@ export default function ARThreeOverlay({ query = "yacht" }: Props) {
     const orig = (ctx as any).pixelStorei?.bind(ctx);
     if (orig) {
       (ctx as any).pixelStorei = (pname: number, param: any) => {
-        try { orig(pname, param); } catch {}
+        try {
+          orig(pname, param);
+        } catch {}
       };
     }
 
     // Lights
     scene.add(new THREE.AmbientLight(0xffffff, 1.4));
     const dir = new THREE.DirectionalLight(0xffffff, 2.2);
-    dir.position.set(3, 4, 2); scene.add(dir);
+    dir.position.set(3, 4, 2);
+    scene.add(dir);
     const fill = new THREE.DirectionalLight(0x9bbcff, 0.8);
-    fill.position.set(-2, 1, -1); scene.add(fill);
+    fill.position.set(-2, 1, -1);
+    scene.add(fill);
 
     const group = new THREE.Group();
-    groupRef.current = group;
     scene.add(group);
 
-    // Load model
+    // Load model into the in-app viewer (non-anchored preview)
     try {
       const q = (query || "").toLowerCase();
       const loader = new GLTFLoader();
@@ -234,8 +268,7 @@ export default function ARThreeOverlay({ query = "yacht" }: Props) {
       setModelLoaded(true);
     }
 
-    function postProcess(root: typeof THREE.Object3D) {
-      // normalize materials + size
+    function postProcess(root: typeof Object3D) {
       root.traverse?.((child: any) => {
         if (child.isMesh && child.material) {
           const mats = Array.isArray(child.material) ? child.material : [child.material];
@@ -254,159 +287,23 @@ export default function ARThreeOverlay({ query = "yacht" }: Props) {
       const box = new THREE.Box3().setFromObject(root as any);
       const size = new THREE.Vector3();
       const center = new THREE.Vector3();
-      box.getSize(size); box.getCenter(center);
+      box.getSize(size);
+      box.getCenter(center);
       (root as any).position?.sub?.(center);
       const maxDim = Math.max(size.x, size.y, size.z) || 1;
       (root as any).scale?.setScalar?.(1.6 / maxDim);
-
-      // start state
-      pitchRef.current = 0.0;
-      scaleRef.current = 1.0;
-      if (groupRef.current) {
-        groupRef.current.rotation.set(0, 0, 0);
-        groupRef.current.position.set(0, 0, 0);
-        groupRef.current.scale.setScalar(1);
-      }
     }
 
-    // ---- Animation loop (auto-spin + inertial spin)
     const animate = () => {
       requestAnimationFrame(animate);
-
-      const g = groupRef.current;
-      if (g) {
-        // Yaw: baseline auto spin when idle + inertia from gestures
-        let spin = gestureModeRef.current === "none" ? autoSpinRef.current : 0;
-        if (Math.abs(yawVelRef.current) > 0.0001) {
-          spin += yawVelRef.current;
-          yawVelRef.current *= 0.95; // friction
-        }
-        g.rotation.y += spin;
-
-        // Pitch (clamped) and scale application
-        g.rotation.x = THREE.MathUtils.clamp(pitchRef.current, -0.95, 0.9);
-        g.scale.setScalar(THREE.MathUtils.clamp(scaleRef.current, 0.4, 2.5));
-      }
-
+      const t = Date.now() * 0.001;
+      group.rotation.y += 0.01;
+      group.position.y = Math.sin(t * 0.5) * 0.08;
       renderer.render(scene, camera);
       gl.endFrameEXP();
     };
     animate();
   };
-
-  // ---------- Gesture helpers ----------
-  const getTouches = (evt: any) =>
-    (evt?.nativeEvent?.touches as { pageX: number; pageY: number }[]) || [];
-
-  const centerOf = (ts: { pageX: number; pageY: number }[]) => {
-    const n = ts.length;
-    if (n === 0) return { x: 0, y: 0 };
-    const s = ts.reduce(
-      (acc, t) => ({ x: acc.x + t.pageX, y: acc.y + t.pageY }),
-      { x: 0, y: 0 }
-    );
-    return { x: s.x / n, y: s.y / n };
-  };
-
-  const distanceOf = (a: { pageX: number; pageY: number }, b: { pageX: number; pageY: number }) => {
-    const dx = a.pageX - b.pageX;
-    const dy = a.pageY - b.pageY;
-    return Math.hypot(dx, dy);
-  };
-
-  const angleOf = (a: { pageX: number; pageY: number }, b: { pageX: number; pageY: number }) =>
-    Math.atan2(b.pageY - a.pageY, b.pageX - a.pageX);
-
-  // Convert screen delta to world movement (rough scale)
-  const toWorldDelta = (dx: number, dy: number) => {
-    // Smaller factor = slower movement across table plane
-    const factor = 0.003;
-    return { wx: dx * factor, wz: dy * factor };
-  };
-
-  const pan = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-
-      onPanResponderGrant: (evt) => {
-        const touches = getTouches(evt);
-        lastTouchesRef.current = touches.map(t => ({ x: t.pageX, y: t.pageY }));
-        if (touches.length >= 2) {
-          gestureModeRef.current = "two";
-          lastDistanceRef.current = distanceOf(touches[0], touches[1]);
-          lastAngleRef.current = angleOf(touches[0], touches[1]);
-          lastCenterRef.current = centerOf(touches);
-        } else {
-          gestureModeRef.current = "drag";
-          lastDistanceRef.current = null;
-          lastAngleRef.current = null;
-          lastCenterRef.current = touches[0] ? { x: touches[0].pageX, y: touches[0].pageY } : null;
-        }
-      },
-
-      onPanResponderMove: (evt, gs: PanResponderGestureState) => {
-        const touches = getTouches(evt);
-        const g = groupRef.current;
-        if (!g || touches.length === 0) return;
-
-        if (touches.length >= 2) {
-          // Two-finger: pinch (scale), twist (yaw), vertical center move (pitch)
-          gestureModeRef.current = "two";
-          const d = distanceOf(touches[0], touches[1]);
-          const a = angleOf(touches[0], touches[1]);
-          const c = centerOf(touches);
-
-          if (lastDistanceRef.current != null) {
-            const pinchRatio = d / Math.max(1, lastDistanceRef.current);
-            scaleRef.current = THREE.MathUtils.clamp(scaleRef.current * pinchRatio, 0.4, 2.5);
-          }
-          if (lastAngleRef.current != null) {
-            let deltaA = a - lastAngleRef.current;
-            // normalize angle to [-PI, PI]
-            deltaA = Math.atan2(Math.sin(deltaA), Math.cos(deltaA));
-            g.rotation.y += deltaA;
-            // store inertial spin (small fraction)
-            yawVelRef.current = deltaA * 0.25;
-          }
-          if (lastCenterRef.current) {
-            const dy = c.y - lastCenterRef.current.y;
-            pitchRef.current += -dy * 0.003; // swipe up → look down
-          }
-
-          lastDistanceRef.current = d;
-          lastAngleRef.current = a;
-          lastCenterRef.current = c;
-        } else {
-          // One-finger: move object over a plane (x/z)
-          gestureModeRef.current = "drag";
-          const prev = lastCenterRef.current;
-          const cur = touches[0] ? { x: touches[0].pageX, y: touches[0].pageY } : null;
-          if (prev && cur) {
-            const dx = cur.x - prev.x;
-            const dy = cur.y - prev.y;
-            const { wx, wz } = toWorldDelta(dx, dy);
-            g.position.x += wx;
-            g.position.z += wz;
-            lastCenterRef.current = cur;
-          }
-        }
-      },
-
-      onPanResponderRelease: () => {
-        // Let inertia/auto-spin take over
-        gestureModeRef.current = "none";
-        lastTouchesRef.current = [];
-        lastDistanceRef.current = null;
-        lastAngleRef.current = null;
-        lastCenterRef.current = null;
-      },
-      onPanResponderTerminationRequest: () => true,
-      onPanResponderTerminate: () => {
-        gestureModeRef.current = "none";
-      },
-    })
-  ).current;
 
   const onLayout = () => {
     const gl = glRef.current;
@@ -424,24 +321,31 @@ export default function ARThreeOverlay({ query = "yacht" }: Props) {
     <View style={styles.root} onLayout={onLayout}>
       {permission?.granted ? <CameraView style={StyleSheet.absoluteFill} facing="back" /> : null}
       <GLView style={StyleSheet.absoluteFill} onContextCreate={onContextCreate} />
-      {/* Gesture catcher on top */}
-      <View {...pan.panHandlers} style={StyleSheet.absoluteFill} />
 
-      {/* Debug / tips */}
+      {/* Debug info */}
       <View pointerEvents="none" style={styles.debugBox}>
-        <Text style={styles.debugText} numberOfLines={4}>🚤 {debug}</Text>
-        {modelLoaded && (
-          <Text style={[styles.debugText, { marginTop: 4, color: "#4ade80" }]}>
-            Tip: 1-finger drag = move • 2-finger pinch = zoom • twist = rotate • vertical = tilt
-          </Text>
-        )}
+        <Text style={styles.debugText} numberOfLines={4}>
+          🚤 {debug}
+        </Text>
+        {modelLoaded && <Text style={[styles.debugText, { marginTop: 4, color: "#4ade80" }]}>Model ready</Text>}
       </View>
 
+      {/* Instructions */}
       <View pointerEvents="none" style={styles.instructionsBox}>
-        <Text style={styles.instructionsText}>
-          Place the yacht on your table, then twist/pinch/drag to explore.
-        </Text>
+        <Text style={styles.instructionsText}>Move your camera — the yacht overlays the real world.</Text>
       </View>
+
+      {/* NEW: “Place on table (AR)” — launches Scene Viewer with your Supabase GLB */}
+      {!!SUPABASE_GLB_URL && (
+        <TouchableOpacity
+          activeOpacity={0.9}
+          style={styles.arBtn}
+          onPress={() => openARPlacement(SUPABASE_GLB_URL, arTitle)}
+        >
+          <Text style={styles.arBtnText}>Place on table (AR)</Text>
+          <Text style={styles.arBtnSub}>Uses Google Scene Viewer</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -449,15 +353,43 @@ export default function ARThreeOverlay({ query = "yacht" }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#000" },
   debugBox: {
-    position: "absolute", top: 50, left: 8, right: 8,
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
+    position: "absolute",
+    top: 50,
+    left: 8,
+    right: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
     backgroundColor: "rgba(0,0,0,0.8)",
   },
   debugText: { color: "#fff", fontSize: 12, fontWeight: "600" },
   instructionsBox: {
-    position: "absolute", bottom: 100, left: 16, right: 16,
-    paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12,
+    position: "absolute",
+    bottom: 140,
+    left: 16,
+    right: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
     backgroundColor: "rgba(255,255,255,0.9)",
   },
   instructionsText: { color: "#1f2937", fontSize: 14, fontWeight: "600", textAlign: "center" },
+
+  // New AR button
+  arBtn: {
+    position: "absolute",
+    bottom: 40,
+    left: 16,
+    right: 16,
+    backgroundColor: "#10b981",
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  arBtnText: { color: "#fff", fontSize: 16, fontWeight: "900" },
+  arBtnSub: { color: "#daf5ea", fontSize: 12, fontWeight: "700", marginTop: 2 },
 });
