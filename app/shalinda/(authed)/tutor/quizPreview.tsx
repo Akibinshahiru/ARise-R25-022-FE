@@ -62,7 +62,8 @@ async function generateSentences(words: string[]) {
 export default function QuizPreviewScreen() {
   const router = useRouter();
   const user = useSelector((s: RootState) => s.auth.user);
-  const { words, quiz } = useLocalSearchParams<{
+  const { words, quiz, title } = useLocalSearchParams<{
+    title?: string;
     words?: string;
     quiz?: string;
   }>();
@@ -272,7 +273,7 @@ export default function QuizPreviewScreen() {
 
   const confirmCreate = async () => {
     const payload = {
-      title: "Test Quiz",
+      title: title || "Untitled Quiz",
       questions: items.map((i) => ({
         sentence: i.sentence,
         answer: i.word,
