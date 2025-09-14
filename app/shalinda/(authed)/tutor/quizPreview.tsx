@@ -3,8 +3,9 @@ import type { RootState } from "@/store";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Image,
@@ -22,16 +23,41 @@ import {
 import { useSelector } from "react-redux";
 import * as ImagePicker from "expo-image-picker";
 import { Audio, type AVPlaybackSource } from "expo-av";
-import { generateSentence } from "@/utils/IT21801204/sentenceGenerator";
 
 type Item = {
-  id: string; // word-index key
+  id: string;
   word: string;
   sentence: string;
   imageUrl?: string | null;
   audioUrl?: string | null;
   isRecording?: boolean;
 };
+
+const QUIZ_API_URL =
+  process.env.EXPO_PUBLIC_QUIZ_API_URL ?? "http://192.168.1.9:8082";
+const SENTENCE_API_URL =
+  process.env.EXPO_PUBLIC_SENTENCE_API ?? "http://localhost:8000";
+
+// === API helper ===
+async function generateSentences(words: string[]) {
+  try {
+    const res = await fetch(`${SENTENCE_API_URL}/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ words }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    return data.results ?? [];
+  } catch (err) {
+    console.error("Sentence API error:", err);
+    return words.map((w) => ({
+      word: w,
+      sentence: `Can you use the word ${w}?`,
+      used_word: true,
+    }));
+  }
+}
 
 export default function QuizPreviewScreen() {
   const router = useRouter();
@@ -41,51 +67,8 @@ export default function QuizPreviewScreen() {
     quiz?: string;
   }>();
 
-  // Tutor-only guard
-  useEffect(() => {
-    if (!user) router.replace("/shalinda/login");
-    else if (user.role !== "tutor")
-      router.replace("/shalinda/(authed)/student/studentHome");
-  }, [user]);
-
-  // Decode list from params and prepare items with generated sentences
-  const initialItems: Item[] = useMemo(() => {
-    try {
-      if (quiz) {
-        // Case 1: coming from MyQuizes with full quiz object
-        const parsed = JSON.parse(decodeURIComponent(quiz));
-        if (!parsed?.questions) return [];
-        return parsed.questions.map((q: any, idx: number) => ({
-          id: `${q.answer}-${idx}`,
-          word: q.answer,
-          sentence: q.sentence,
-          imageUrl: q.imageUrl ?? null,
-          audioUrl: q.audioUrl ?? null,
-          isRecording: false,
-        }));
-      }
-
-      if (words) {
-        // Case 2: coming from CreateQuiz with only words
-        const arr = JSON.parse(decodeURIComponent(words));
-        if (!Array.isArray(arr)) return [];
-        return arr.map((w: string, idx: number) => ({
-          id: `${w}-${idx}`,
-          word: w,
-          sentence: generateSentence(w),
-          imageUrl: null,
-          audioUrl: null,
-          isRecording: false,
-        }));
-      }
-
-      return [];
-    } catch {
-      return [];
-    }
-  }, [words]);
-
-  const [items, setItems] = useState<Item[]>(initialItems);
+  const [items, setItems] = useState<Item[]>([]);
+  const [loading, setLoading] = useState(true);
 
   // Edit modal state
   const [editVisible, setEditVisible] = useState(false);
@@ -95,26 +78,59 @@ export default function QuizPreviewScreen() {
   // Media/recording refs
   const recordingRef = useRef<Audio.Recording | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
-  const QUIZ_API_URL =
-    process.env.EXPO_PUBLIC_QUIZ_API_URL ?? "http://192.168.1.9:8082";
 
-  // Permissions — ask once on mount
+  // Tutor-only guard
+  useEffect(() => {
+    if (!user) router.replace("/shalinda/login");
+    else if (user.role !== "tutor")
+      router.replace("/shalinda/(authed)/student/studentHome");
+  }, [user]);
+
+  // Init: load quiz or generate sentences
   useEffect(() => {
     (async () => {
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
-      await Audio.requestPermissionsAsync();
-      // iOS required category for recording
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-      });
+      try {
+        if (quiz) {
+          const parsed = JSON.parse(decodeURIComponent(quiz));
+          if (parsed?.questions) {
+            setItems(
+              parsed.questions.map((q: any, idx: number) => ({
+                id: `${q.answer}-${idx}`,
+                word: q.answer,
+                sentence: q.sentence,
+                imageUrl: q.imageUrl ?? null,
+                audioUrl: q.audioUrl ?? null,
+                isRecording: false,
+              }))
+            );
+          }
+        } else if (words) {
+          const arr = JSON.parse(decodeURIComponent(words));
+          if (Array.isArray(arr) && arr.length) {
+            const results = await generateSentences(arr);
+            setItems(
+              results.map((r: any, idx: number) => ({
+                id: `${r.word}-${idx}`,
+                word: r.word,
+                sentence: r.sentence,
+                imageUrl: null,
+                audioUrl: null,
+                isRecording: false,
+              }))
+            );
+          }
+        }
+      } catch (err) {
+        console.error("Init error:", err);
+      } finally {
+        setLoading(false);
+      }
     })();
-  }, []);
+  }, [words, quiz]);
 
   if (!user || user.role !== "tutor") return null;
 
-  // Helpers to update a single item by id
+  // Helpers
   const updateItem = (id: string, patch: Partial<Item>) => {
     setItems((prev) =>
       prev.map((it) => (it.id === id ? { ...it, ...patch } : it))
@@ -134,12 +150,18 @@ export default function QuizPreviewScreen() {
     setEditingId(null);
   };
 
-  const onRegenerate = (it: Item) => {
-    updateItem(it.id, { sentence: generateSentence(it.word) });
+  const onRegenerate = async (it: Item) => {
+    try {
+      const results = await generateSentences([it.word]);
+      if (results.length > 0) {
+        updateItem(it.id, { sentence: results[0].sentence });
+      }
+    } catch (e) {
+      console.error("Regenerate error:", e);
+    }
   };
 
   // === File upload helper ===
-
   const uploadFile = async (uri: string, folder: string) => {
     const formData = new FormData();
     const ext = uri.split(".").pop() || "jpg";
@@ -150,17 +172,13 @@ export default function QuizPreviewScreen() {
       name: `upload.${ext}`,
       type,
     } as any);
-
     formData.append("folder", folder);
 
     const res = await fetch(`${QUIZ_API_URL}/media/upload`, {
       method: "POST",
       body: formData,
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
+      headers: { "Content-Type": "multipart/form-data" },
     });
-
     if (!res.ok) throw new Error("Upload failed");
     return (await res.json()) as { publicUrl: string; path: string };
   };
@@ -173,13 +191,7 @@ export default function QuizPreviewScreen() {
         quality: 0.8,
       });
       if (!res.canceled && res.assets?.length) {
-        // updateItem(it.id, { imageUrl: res.assets[0].uri });
-        console.log(res.assets[0].uri);
-
-        // upload to backend
         const uploaded = await uploadFile(res.assets[0].uri, "uploads");
-        console.log(uploaded);
-
         updateItem(it.id, { imageUrl: uploaded.publicUrl });
       }
     } catch (e) {
@@ -203,9 +215,7 @@ export default function QuizPreviewScreen() {
       await stopAndUnloadSound();
       const { sound } = await Audio.Sound.createAsync(
         { uri } as AVPlaybackSource,
-        {
-          shouldPlay: true,
-        }
+        { shouldPlay: true }
       );
       soundRef.current = sound;
       await sound.playAsync();
@@ -216,7 +226,6 @@ export default function QuizPreviewScreen() {
 
   const onToggleRecord = async (it: Item) => {
     try {
-      // If already recording -> stop & save
       if (recordingRef.current) {
         try {
           await recordingRef.current.stopAndUnloadAsync();
@@ -225,17 +234,13 @@ export default function QuizPreviewScreen() {
         recordingRef.current = null;
         updateItem(it.id, { isRecording: false, audioUrl: uri ?? null });
 
-        console.log(uri);
-
         if (uri) {
           const uploaded = await uploadFile(uri, "uploads");
           updateItem(it.id, { audioUrl: uploaded.publicUrl });
         }
-
         return;
       }
 
-      // Start recording
       const can = await Audio.getPermissionsAsync();
       if (!can.granted) {
         const req = await Audio.requestPermissionsAsync();
@@ -255,7 +260,7 @@ export default function QuizPreviewScreen() {
 
       const rec = new Audio.Recording();
       await rec.prepareToRecordAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY // good defaults
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
       await rec.startAsync();
       recordingRef.current = rec;
@@ -266,10 +271,8 @@ export default function QuizPreviewScreen() {
   };
 
   const confirmCreate = async () => {
-    console.log(items);
-    // transform to backend format
     const payload = {
-      title: "Test Quiz", // you can make this dynamic
+      title: "Test Quiz",
       questions: items.map((i) => ({
         sentence: i.sentence,
         answer: i.word,
@@ -279,9 +282,6 @@ export default function QuizPreviewScreen() {
     };
 
     try {
-      console.log("Sending payload");
-      console.log(payload);
-
       const res = await fetch(`${QUIZ_API_URL}/quiz`, {
         method: "POST",
         headers: {
@@ -291,13 +291,8 @@ export default function QuizPreviewScreen() {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Failed to create quiz");
-      }
-
+      if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      console.log("Quiz created:", data);
 
       Alert.alert("Success 🎉", "Quiz created successfully", [
         {
@@ -315,109 +310,91 @@ export default function QuizPreviewScreen() {
     }
   };
 
-  const renderRow = ({ item, index }: { item: Item; index: number }) => {
-    return (
-      <LinearGradient
-        colors={["#4e54c8", "#8f94fb"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.card}
-      >
-        <View style={styles.cardTop}>
-          <Text style={styles.wordText}>
-            {index + 1}. {item.word}
-          </Text>
-
-          {/* Actions row */}
-          <View style={styles.actionsRow}>
-            {/* Edit sentence */}
-            <Pressable
-              onPress={() => onPressEdit(item)}
-              hitSlop={10}
-              style={styles.iconBtn}
-            >
-              <Ionicons name="create-outline" size={20} color="#fff" />
-            </Pressable>
-
-            {/* Regenerate */}
-            <Pressable
-              onPress={() => onRegenerate(item)}
-              hitSlop={10}
-              style={styles.iconBtn}
-            >
-              <Ionicons name="refresh-outline" size={20} color="#fff" />
-            </Pressable>
-
-            {/* Pick image */}
-            <Pressable
-              onPress={() => onPickImage(item)}
-              hitSlop={10}
-              style={styles.iconBtn}
-            >
-              <Ionicons name="image-outline" size={20} color="#fff" />
-            </Pressable>
-
-            {/* Record / Stop */}
-            <Pressable
-              onPress={() => onToggleRecord(item)}
-              hitSlop={10}
-              style={styles.iconBtn}
-            >
-              <Ionicons
-                name={item.isRecording ? "stop-circle-outline" : "mic-outline"}
-                size={20}
-                color="#fff"
-              />
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Sentence */}
-        <Text style={styles.sentenceText}>{item.sentence}</Text>
-
-        {/* Image preview (if any) */}
-        {item.imageUrl ? (
-          <View style={styles.imageWrap}>
-            <Image source={{ uri: item.imageUrl }} style={styles.image} />
-            <TouchableOpacity
-              onPress={() => updateItem(item.id, { imageUrl: null })}
-              style={styles.removeBadge}
-            >
-              <Ionicons name="close" size={16} color="#111827" />
-            </TouchableOpacity>
-          </View>
-        ) : null}
-
-        {/* Audio controls */}
-        <View style={styles.audioRow}>
-          <TouchableOpacity
-            onPress={() => playAudio(item.audioUrl)}
-            style={[
-              styles.smallButton,
-              !item.audioUrl && styles.smallButtonDisabled,
-            ]}
-            disabled={!item.audioUrl}
+  const renderRow = ({ item, index }: { item: Item; index: number }) => (
+    <LinearGradient
+      colors={["#4e54c8", "#8f94fb"]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.card}
+    >
+      <View style={styles.cardTop}>
+        <Text style={styles.wordText}>
+          {index + 1}. {item.word}
+        </Text>
+        <View style={styles.actionsRow}>
+          <Pressable
+            onPress={() => onPressEdit(item)}
+            hitSlop={10}
+            style={styles.iconBtn}
           >
-            <Ionicons name="play" size={16} color="#fff" />
-            <Text style={styles.smallButtonText}>Play</Text>
-          </TouchableOpacity>
-
-          {item.audioUrl ? (
-            <TouchableOpacity
-              onPress={async () => {
-                await stopAndUnloadSound();
-                updateItem(item.id, { audioUrl: null });
-              }}
-              style={[styles.smallButton, { backgroundColor: "#DC2626" }]}
-            >
-              <Ionicons name="trash-outline" size={16} color="#fff" />
-              <Text style={styles.smallButtonText}>Remove</Text>
-            </TouchableOpacity>
-          ) : null}
+            <Ionicons name="create-outline" size={20} color="#fff" />
+          </Pressable>
+          <Pressable
+            onPress={() => onRegenerate(item)}
+            hitSlop={10}
+            style={styles.iconBtn}
+          >
+            <Ionicons name="refresh-outline" size={20} color="#fff" />
+          </Pressable>
+          <Pressable
+            onPress={() => onPickImage(item)}
+            hitSlop={10}
+            style={styles.iconBtn}
+          >
+            <Ionicons name="image-outline" size={20} color="#fff" />
+          </Pressable>
+          <Pressable
+            onPress={() => onToggleRecord(item)}
+            hitSlop={10}
+            style={styles.iconBtn}
+          >
+            <Ionicons
+              name={item.isRecording ? "stop-circle-outline" : "mic-outline"}
+              size={20}
+              color="#fff"
+            />
+          </Pressable>
         </View>
-      </LinearGradient>
-    );
-  };
+      </View>
+      <Text style={styles.sentenceText}>{item.sentence}</Text>
+      {item.imageUrl ? (
+        <View style={styles.imageWrap}>
+          <Image source={{ uri: item.imageUrl }} style={styles.image} />
+          <TouchableOpacity
+            onPress={() => updateItem(item.id, { imageUrl: null })}
+            style={styles.removeBadge}
+          >
+            <Ionicons name="close" size={16} color="#111827" />
+          </TouchableOpacity>
+        </View>
+      ) : null}
+      <View style={styles.audioRow}>
+        <TouchableOpacity
+          onPress={() => playAudio(item.audioUrl)}
+          style={[
+            styles.smallButton,
+            !item.audioUrl && styles.smallButtonDisabled,
+          ]}
+          disabled={!item.audioUrl}
+        >
+          <Ionicons name="play" size={16} color="#fff" />
+          <Text style={styles.smallButtonText}>Play</Text>
+        </TouchableOpacity>
+        {item.audioUrl ? (
+          <TouchableOpacity
+            onPress={async () => {
+              await stopAndUnloadSound();
+              updateItem(item.id, { audioUrl: null });
+            }}
+            style={[styles.smallButton, { backgroundColor: "#DC2626" }]}
+          >
+            <Ionicons name="trash-outline" size={16} color="#fff" />
+            <Text style={styles.smallButtonText}>Remove</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    </LinearGradient>
+  );
 
   return (
     <RoleAwareSidebarLayout title="Preview Quiz">
@@ -432,59 +409,61 @@ export default function QuizPreviewScreen() {
               Edit sentences, add image & voice clues.
             </Text>
 
-            <View style={styles.countPill}>
-              <Ionicons name="list" size={18} color="#111827" />
-              <Text style={styles.countText}>
-                {items.length} word{items.length === 1 ? "" : "s"}
-              </Text>
-            </View>
-
-            <FlatList
-              data={items}
-              keyExtractor={(it) => it.id}
-              contentContainerStyle={{ paddingVertical: 8, paddingBottom: 24 }}
-              renderItem={renderRow}
-              ListEmptyComponent={
-                <Text style={styles.emptyText}>No words passed in.</Text>
-              }
-            />
-
-            {/* Footer actions */}
-            <View style={styles.footerRow}>
-              <TouchableOpacity
-                onPress={() => router.back()}
-                style={[styles.btn, styles.secondaryBtn]}
-              >
-                <Text style={[styles.btnText, { color: "#111827" }]}>
-                  ← Back
-                </Text>
-              </TouchableOpacity>
-
-              {quiz && (
-                <TouchableOpacity
-                  onPress={() => {
-                    router.replace({
-                      pathname: "/shalinda/(authed)/tutor/quizShare",
-                      params: {
-                        quizId: JSON.parse(quiz).id ?? "XXXXX",
-                      },
-                    });
-                  }}
-                  style={styles.btn}
-                >
-                  <Text style={styles.btnText}>
-                    Share QR{" "}
-                    <Ionicons name="add-circle-sharp" size={20} color="#fff" />
+            {loading ? (
+              <ActivityIndicator size="large" style={{ marginTop: 40 }} />
+            ) : (
+              <>
+                <View style={styles.countPill}>
+                  <Ionicons name="list" size={18} color="#111827" />
+                  <Text style={styles.countText}>
+                    {items.length} word{items.length === 1 ? "" : "s"}
                   </Text>
-                </TouchableOpacity>
-              )}
-
-              {words && (
-                <TouchableOpacity onPress={confirmCreate} style={styles.btn}>
-                  <Text style={styles.btnText}>Create Quiz ✅</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+                </View>
+                <FlatList
+                  data={items}
+                  keyExtractor={(it) => it.id}
+                  contentContainerStyle={{
+                    paddingVertical: 8,
+                    paddingBottom: 24,
+                  }}
+                  renderItem={renderRow}
+                  ListEmptyComponent={
+                    <Text style={styles.emptyText}>No words found.</Text>
+                  }
+                />
+                <View style={styles.footerRow}>
+                  <TouchableOpacity
+                    onPress={() => router.back()}
+                    style={[styles.btn, styles.secondaryBtn]}
+                  >
+                    <Text style={[styles.btnText, { color: "#111827" }]}>
+                      ← Back
+                    </Text>
+                  </TouchableOpacity>
+                  {quiz && (
+                    <TouchableOpacity
+                      onPress={() =>
+                        router.replace({
+                          pathname: "/shalinda/(authed)/tutor/quizShare",
+                          params: { quizId: JSON.parse(quiz).id ?? "XXXXX" },
+                        })
+                      }
+                      style={styles.btn}
+                    >
+                      <Text style={styles.btnText}>Share QR</Text>
+                    </TouchableOpacity>
+                  )}
+                  {words && (
+                    <TouchableOpacity
+                      onPress={confirmCreate}
+                      style={styles.btn}
+                    >
+                      <Text style={styles.btnText}>Create Quiz ✅</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </>
+            )}
           </View>
 
           {/* Edit sentence modal */}
@@ -563,7 +542,6 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   countText: { fontWeight: "800", color: "#111827" },
-
   card: {
     paddingVertical: 14,
     paddingHorizontal: 16,
@@ -583,14 +561,12 @@ const styles = StyleSheet.create({
   },
   wordText: { color: "#fff", fontSize: 18, fontWeight: "800", maxWidth: "65%" },
   sentenceText: { color: "#fff", marginTop: 6, lineHeight: 20 },
-
   actionsRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   iconBtn: {
     padding: 8,
     borderRadius: 999,
     backgroundColor: "rgba(255,255,255,0.18)",
   },
-
   imageWrap: {
     marginTop: 10,
     alignSelf: "flex-start",
@@ -612,7 +588,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
-
   audioRow: { flexDirection: "row", gap: 10, marginTop: 10 },
   smallButton: {
     flexDirection: "row",
@@ -625,7 +600,6 @@ const styles = StyleSheet.create({
   },
   smallButtonDisabled: { opacity: 0.5 },
   smallButtonText: { color: "#fff", fontWeight: "700" },
-
   footerRow: {
     flexDirection: "row",
     gap: 12,
@@ -647,10 +621,7 @@ const styles = StyleSheet.create({
   },
   secondaryBtn: { backgroundColor: "#F3F4F6" },
   btnText: { color: "#fff", fontSize: 16, fontWeight: "800" },
-
   emptyText: { textAlign: "center", color: "#6b7280", marginTop: 20 },
-
-  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",
