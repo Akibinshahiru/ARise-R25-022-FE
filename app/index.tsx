@@ -3,14 +3,14 @@ import { useRouter } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 const members = [
-  { name: "Surface Dyslexia", path: "/akila/surface-dyslexia", colors: ["#4f46e5", "#6366f1"] },
+  { name: "Surface Dyslexia", path: "/akila/login", colors: ["#4f46e5", "#6366f1"] },
   {
-    name: "Binoosh",
+    name: "Phonological Dyslexia",
     path: "/binoosh/dashboard",
     colors: ["#ec4899", "#f472b6"],
   },
   {
-    name: "Shalinda",
+    name: "Othographic Dyslexia",
     path: "/shalinda/dashboard",
     colors: ["#f59e0b", "#fbbf24"],
   },

@@ -37,7 +37,7 @@ type Props = {
 
 // ---------- API helpers ----------
 function getStoryApiBase(): string {
-  return (process.env.EXPO_PUBLIC_API_BASE_URL_STORY as string) || "http://localhost:8001";
+  return (process.env.EXPO_PUBLIC_API_BASE_URL_STORY as string);
 }
 
 async function fetchStoryForWord(word: string): Promise<StoryResponse> {
@@ -52,12 +52,12 @@ async function fetchStoryForWord(word: string): Promise<StoryResponse> {
 
 function getPronunciationUrl(): string {
   // This should point directly to your /evaluate-mobile endpoint
-  return (process.env.EXPO_PUBLIC_API_BASE_URL_PRONUNCIATION as string) || "http://localhost:8000/evaluate-mobile";
+  return (process.env.EXPO_PUBLIC_API_BASE_URL_PRONUNCIATION as string);
 }
 
 function getPronunciationApiBase(): string {
   // Base for pronunciation service (used for IEP report generation)
-  return (process.env.EXPO_PUBLIC_API_BASE_URL_IEP as string) || "http://localhost:8002";
+  return (process.env.EXPO_PUBLIC_API_BASE_URL_IEP as string);
 }
 
 // Evaluate pronunciation for a word within a sentence
