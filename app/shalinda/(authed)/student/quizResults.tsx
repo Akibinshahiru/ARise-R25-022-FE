@@ -15,7 +15,7 @@ import { useSelector } from "react-redux";
 import { useRouter } from "expo-router";
 
 const QUIZ_API_URL =
-  process.env.EXPO_PUBLIC_QUIZ_API_URL ?? "http://192.168.1.9:8082";
+  process.env.EXPO_PUBLIC_QUIZ_API_URL ?? "http://192.168.0.195:8082";
 
 type QuizReport = {
   id: string;

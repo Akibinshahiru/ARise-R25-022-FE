@@ -1,5 +1,5 @@
 const API_URL =
-  process.env.EXPO_PUBLIC_SENTENCE_API ?? "http://192.168.1.9:8000";
+  process.env.EXPO_PUBLIC_SENTENCE_API ?? "http://192.168.0.195:8000";
 
 export async function generateSentences(
   words: string[]

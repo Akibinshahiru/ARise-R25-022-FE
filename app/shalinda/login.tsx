@@ -13,7 +13,7 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 
 const API_URL =
-  process.env.EXPO_PUBLIC_AUTH_API_URL ?? "http://192.168.1.9:8080";
+  process.env.EXPO_PUBLIC_AUTH_API_URL ?? "http://192.168.0.195:8080";
 
 export default function LoginScreen() {
   const dispatch = useDispatch();
