@@ -1,10 +1,15 @@
+import { UnauthenticatedSidebarLayout } from "@/components/it21801204";
+import HomeButton from "@/components/shared/HomeButton";
 import { StyleSheet, Text, View } from "react-native";
 
-export default function AkilaDashboard() {
+export default function ShalindaDashboard() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.text}>Akila’s Dashboard</Text>
-    </View>
+    <UnauthenticatedSidebarLayout title="Welcome">
+      <View style={styles.container}>
+        <Text style={styles.text}>Welcome to the Dashboard!</Text>
+        <HomeButton />
+      </View>
+    </UnauthenticatedSidebarLayout>
   );
 }
 
