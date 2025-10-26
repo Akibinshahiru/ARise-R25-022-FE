@@ -12,7 +12,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Allow camera access to overlay AR stories on the real world."
-      }
+      },
+      "bundleIdentifier": "com.anonymous.ARiseR25022FE"
     },
     "android": {
       "adaptiveIcon": {
@@ -22,7 +23,7 @@
       "edgeToEdgeEnabled": true,
       "permissions": [
         "CAMERA",
-        "CAMERA"
+        "android.permission.CAMERA"
       ],
       "package": "com.anonymous.ARiseR25022FE"
     },

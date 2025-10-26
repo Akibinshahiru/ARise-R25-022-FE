@@ -11,7 +11,9 @@ import {
   View,
 } from "react-native";
 import * as THREE from "three";
-import { DRACOLoader, GLTFLoader } from "three-stdlib";
+// import { DRACOLoader, GLTFLoader } from "three-stdlib";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 
 type Props = { query?: string };
 
