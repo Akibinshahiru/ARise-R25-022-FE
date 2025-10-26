@@ -108,7 +108,7 @@ export default function RegisterScreen() {
                   role === r && { color: "#fff", fontWeight: "700" },
                 ]}
               >
-                {r}
+                {r.charAt(0).toUpperCase() + r.slice(1)}
               </Text>
             </TouchableOpacity>
           ))}
