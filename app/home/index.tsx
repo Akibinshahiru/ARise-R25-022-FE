@@ -34,7 +34,7 @@ export default function HomePage() {
         path: user?.role == "tutor" ? "/shalinda/(authed)/tutor/tutorHome" : "/shalinda/(authed)/student/studentHome",
         colors: ["#f59e0b", "#fbbf24"],
       },
-      { name: "Hiruni", path: "/hiruni/dashboard", colors: ["#4f46e5", "#6366f1"] },
+      { name: "Hiruni", path: "/hiruni/splash", colors: ["#4f46e5", "#6366f1"] },
     ],
     [user?.role]
   );

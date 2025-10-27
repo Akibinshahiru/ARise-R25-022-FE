@@ -1,10 +1,21 @@
-import { Stack } from "expo-router";
+import { useEffect } from 'react';
+import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+// import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 
-export default function AkilaLayout() {
+export default function RootLayout() {
+  // useFrameworkReady();
+
   return (
-    <Stack
-      initialRouteName="dashboard"
-      screenOptions={{ headerShown: false }}
-    />
+    <>
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="splash" />
+        <Stack.Screen name="registration" />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="games" options={{ headerShown: false }} />
+        <Stack.Screen name="+not-found" />
+      </Stack>
+      <StatusBar style="auto" />
+    </>
   );
 }
