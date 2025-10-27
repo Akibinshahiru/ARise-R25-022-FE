@@ -1,7 +1,7 @@
 // AllIEPReportsList.tsx
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import axios from "axios";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
@@ -339,12 +339,11 @@ export default function AllIEPReportsList() {
             "application/pdf"
           );
           const pdfB64 =
-            base64 ??
-            (await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 }));
+            base64 ?? (await FileSystem.readAsStringAsync(uri, { encoding: "base64" }));
           await FileSystem.StorageAccessFramework.writeAsStringAsync(
             target,
             pdfB64,
-            { encoding: FileSystem.EncodingType.Base64 }
+            { encoding: "base64" }
           );
           Alert.alert("Saved", "PDF saved to your selected folder.");
           return;

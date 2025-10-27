@@ -14,7 +14,7 @@ export default function ARBubblesOverlay({ children }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [permission?.granted]);
 
-  if (!permission) {
+  if (!permission || !permission.granted) {
     return (
       <View style={[StyleSheet.absoluteFill, styles.center]}>
         <ActivityIndicator size="large" color="#6d28d9" />
@@ -22,18 +22,14 @@ export default function ARBubblesOverlay({ children }: Props) {
     );
   }
 
-  if (!permission.granted) {
-    return (
-      <View style={[StyleSheet.absoluteFill, styles.center]}> 
-        <ActivityIndicator size="large" color="#6d28d9" />
-      </View>
-    );
-  }
-
   return (
-    <View style={StyleSheet.absoluteFill}>
-      <CameraView style={StyleSheet.absoluteFill} facing="back" />
-      {children}
+    <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        <CameraView style={StyleSheet.absoluteFill} facing="back" />
+      </View>
+      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        {children}
+      </View>
     </View>
   );
 }
@@ -41,4 +37,3 @@ export default function ARBubblesOverlay({ children }: Props) {
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#000' },
 });
-

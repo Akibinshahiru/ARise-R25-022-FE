@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from "axios";
 import { Asset } from "expo-asset";
 import { Audio } from "expo-av";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from 'expo-router';
@@ -70,7 +70,7 @@ async function evaluatePronunciation(word: string, sentence: string): Promise<an
   }
   const uri = asset.localUri || asset.uri;
   if (!uri) throw new Error("Failed to load audio asset");
-  const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+  const base64 = await FileSystem.readAsStringAsync(uri, { encoding: "base64" });
 
   const form = new FormData();
   form.append("audio_base64", base64 as any);
