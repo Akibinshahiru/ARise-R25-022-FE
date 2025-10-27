@@ -27,6 +27,7 @@ export default function ViewChallengesScreen() {
   const router = useRouter();
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [loading, setLoading] = useState(true);
+  const [useOriginal, setUseOrigginal] = useState(false);
 
   useEffect(() => {
     fetchChallenges();
@@ -76,8 +77,8 @@ export default function ViewChallengesScreen() {
             <>
               {/* Intro animation: brand + hero */}
               <Animated.View entering={FadeIn.duration(600)} style={styles.brandRow}>
-                <Text style={styles.brand}>ARise</Text>
-                <Ionicons name="sparkles" size={22} color="#6C2BD9" />
+                <Text onPress={()=> {setUseOrigginal(!useOriginal)}} style={styles.brand}>ARise</Text>
+                <Ionicons name="sparkles" size={22} color={`${useOriginal ? "#6C2BD9" : "#ff6a00ff"}`} />
               </Animated.View>
               <Animated.View entering={ZoomIn.springify().delay(50)}>
                 <LinearGradient colors={["#7C3AED", "#4F46E5"] as const} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroCard}>
@@ -93,12 +94,14 @@ export default function ViewChallengesScreen() {
           renderItem={({ item, index }) => (
             <Animated.View entering={FadeInDown.delay(150 + index * 90).springify()}>
               <TouchableOpacity
-                style={styles.card}
-                onPress={() =>
-                  router.push({ pathname: "/binoosh/challenge-student-three", params: { challengeId: item._id } })
+                 style={styles.card}
+                 onPress={() =>
+                 useOriginal
+                 ? router.push({ pathname: "/binoosh/challenge-student-five", params: { challengeId: item._id } })
+                 : router.push({ pathname: "/binoosh/challenge-student-four", params: { challengeId: item._id } })
                 }
                 activeOpacity={0.9}
-              >
+                >
                 <View style={styles.cardHeader}>
                   <Text style={styles.title}>{item.title}</Text>
                   <View style={styles.pill}>
