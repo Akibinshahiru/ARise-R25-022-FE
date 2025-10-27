@@ -25,7 +25,7 @@ export default function ARBubblesOverlay({ children }: Props) {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <CameraView style={StyleSheet.absoluteFill} facing="back" />
+        <CameraView style={StyleSheet.absoluteFill} facing="back" pointerEvents="none" />
       </View>
       <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
         {children}

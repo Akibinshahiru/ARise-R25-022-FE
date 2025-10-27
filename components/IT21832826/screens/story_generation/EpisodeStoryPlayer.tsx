@@ -143,10 +143,8 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
   const [puzzleSlots, setPuzzleSlots] = useState<Array<{ id: string; ch: string | null }>>([]);
   const [puzzleCorrect, setPuzzleCorrect] = useState<boolean | null>(null);
   const [puzzleFloating, setPuzzleFloating] = useState(new Animated.Value(0));
-  const puzzleContainerRef = useRef<View>(null);
-  const [puzzleContainerOffset, setPuzzleContainerOffset] = useState<{x:number,y:number}>({x:0,y:0});
   const slotRefs = useRef<Array<View | null>>([]);
-  const [slotCenters, setSlotCenters] = useState<Array<{x:number,y:number}>>([]); // local-to-container coords
+  const [slotRects, setSlotRects] = useState<Array<{ x: number; y: number; width: number; height: number }>>([]);
   const tiltX = useRef(new Animated.Value(0)).current;
   const tiltY = useRef(new Animated.Value(0)).current;
 
@@ -315,7 +313,7 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
       }
       setPuzzleTiles(scrambled.map((ch, i) => ({ id: `t${i}`, ch })));
       setPuzzleSlots(letters.map((_, i) => ({ id: `s${i}`, ch: null })));
-      setSlotCenters(letters.map(() => ({ x: 0, y: 0 })));
+      setSlotRects(letters.map(() => ({ x: 0, y: 0, width: 0, height: 0 })));
       setPuzzleCorrect(null);
       setPuzzleVisible(true);
       // gentle float animation for the letter tray
@@ -393,6 +391,7 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
     }
     setPuzzleTiles(scrambled.map((ch, i) => ({ id: `t${i}`, ch })));
     setPuzzleSlots(letters.map((_, i) => ({ id: `s${i}`, ch: null })));
+    setSlotRects(letters.map(() => ({ x: 0, y: 0, width: 0, height: 0 })));
   }, [scanned]);
 
   // Play a gentle chime for quiz feedback (declare early so it's available to handlers below)
@@ -883,9 +882,9 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
                     // measure center for drop detection
                     try {
                       (slotRefs.current[i] as any)?.measureInWindow?.((x:number,y:number,w:number,h:number) => {
-                        setSlotCenters((prev) => {
+                        setSlotRects((prev) => {
                           const next = [...prev];
-                          next[i] = { x: (x - puzzleContainerOffset.x) + w/2, y: (y - puzzleContainerOffset.y) + h/2 };
+                          next[i] = { x, y, width: w, height: h };
                           return next;
                         });
                       });
@@ -902,10 +901,6 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
 
             {/* Letter bubbles (draggable, floating) */}
             <Animated.View
-              ref={puzzleContainerRef as any}
-              onLayout={() => {
-                try { (puzzleContainerRef.current as any)?.measureInWindow?.((x:number,y:number)=> setPuzzleContainerOffset({x,y})); } catch {}
-              }}
               style={[styles.puzzleRack, { height: 160, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center',
                 transform: [{ translateY: puzzleFloating.interpolate({ inputRange: [0,1], outputRange: [4, -4] }) }] }]}
             >
@@ -919,18 +914,25 @@ export default function EpisodeStoryPlayer({ word, initialData, autoOpenAR = fal
                     viewportW={W}
                     viewportH={H}
                     onDrop={async (pageX, pageY) => {
-                      // find nearest slot center
-                      const localX = pageX - puzzleContainerOffset.x;
-                      const localY = pageY - puzzleContainerOffset.y;
-                      let best=-1, bestD=1e9;
-                      for (let i=0;i<slotCenters.length;i++){
-                        const c = slotCenters[i];
-                        if(!c) continue;
-                        const dx = c.x - localX, dy = c.y - localY;
-                        const d = Math.hypot(dx,dy);
-                        if (d < bestD){ bestD=d; best=i; }
+                      let best = -1;
+                      let bestDist = Number.POSITIVE_INFINITY;
+                      for (let i = 0; i < slotRects.length; i++) {
+                        const rect = slotRects[i];
+                        if (!rect) continue;
+                        const expanded = 24; // allow forgiving margin
+                        const withinX = pageX >= rect.x - expanded && pageX <= rect.x + rect.width + expanded;
+                        const withinY = pageY >= rect.y - expanded && pageY <= rect.y + rect.height + expanded;
+                        if (withinX && withinY && !(puzzleSlots[i]?.ch)) {
+                          const cx = rect.x + rect.width / 2;
+                          const cy = rect.y + rect.height / 2;
+                          const dist = Math.hypot(cx - pageX, cy - pageY);
+                          if (dist < bestDist) {
+                            bestDist = dist;
+                            best = i;
+                          }
+                        }
                       }
-                      if (best>=0 && bestD < 160 && !(puzzleSlots[best]?.ch)){
+                      if (best >= 0) {
                         await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                         onPuzzlePlaceAt(idx, best);
                         return true;
@@ -1144,7 +1146,7 @@ function QuizOption({ iconName, imageUri, selected, onPress }: { iconName: strin
 }
 
 // Draggable floating bubble letter
-function DraggableBubble({ label, onDrop, tiltX, tiltY, viewportW = 360, viewportH = 640 }: { label: string; onDrop: (pageX:number,pageY:number)=>Promise<boolean>; tiltX?: Animated.Value; tiltY?: Animated.Value; viewportW?: number; viewportH?: number }){
+function DraggableBubble({ label, onDrop, tiltX, tiltY, viewportW = 360, viewportH = 640 }: { label: string; onDrop: (centerX:number, centerY:number)=>Promise<boolean>; tiltX?: Animated.Value; tiltY?: Animated.Value; viewportW?: number; viewportH?: number }){
   const base = useRef({ x: Math.random()*140 - 70, y: Math.random()*80 - 40 }).current;
   const baseX = useRef(new Animated.Value(base.x)).current;
   const baseY = useRef(new Animated.Value(base.y)).current;
@@ -1185,6 +1187,7 @@ function DraggableBubble({ label, onDrop, tiltX, tiltY, viewportW = 360, viewpor
     rafRef.current = requestAnimationFrame(loop);
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, [isDragging, floatAnimation, baseX, baseY, viewportW, viewportH]);
+  const bubbleRef = useRef<View | null>(null);
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onPanResponderGrant: () => { 
@@ -1194,7 +1197,18 @@ function DraggableBubble({ label, onDrop, tiltX, tiltY, viewportW = 360, viewpor
     },
     onPanResponderMove: Animated.event([null, { dx: pos.x, dy: pos.y }], { useNativeDriver: false }),
     onPanResponderRelease: async (e, gesture) => {
-      const ok = await onDrop(e.nativeEvent.pageX, e.nativeEvent.pageY);
+      const ok = await new Promise<boolean>((resolve) => {
+        const node = bubbleRef.current as any;
+        if (node && typeof node.measureInWindow === "function") {
+          try {
+            node.measureInWindow((x: number, y: number, w: number, h: number) => {
+              onDrop(x + w / 2, y + h / 2).then(resolve).catch(() => resolve(false));
+            });
+            return;
+          } catch {}
+        }
+        onDrop(e.nativeEvent.pageX, e.nativeEvent.pageY).then(resolve).catch(() => resolve(false));
+      });
       if (!ok) {
         Animated.parallel([
           Animated.spring(pos, { toValue: { x: 0, y: 0 }, useNativeDriver: true }),
@@ -1211,6 +1225,7 @@ function DraggableBubble({ label, onDrop, tiltX, tiltY, viewportW = 360, viewpor
   })).current;
   return (
     <Animated.View
+      ref={bubbleRef}
       {...panResponder.panHandlers}
       style={{ margin: 8, opacity: vanish, transform: [ 
         { translateX: Animated.add(Animated.add(baseX, Animated.add(floatAnimation.x, pos.x)), (isDragging ? new Animated.Value(0) : (tiltX || new Animated.Value(0)))) }, 
