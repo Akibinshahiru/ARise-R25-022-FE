@@ -18,7 +18,7 @@ export default function StudentHome() {
 
   // Guard: only tutors
   useEffect(() => {
-    if (!user) router.replace("/shalinda/login");
+    if (!user) router.replace("/login");
     else if (user.role !== "student")
       router.replace("/shalinda/(authed)/tutor/tutorHome");
   }, [user]);

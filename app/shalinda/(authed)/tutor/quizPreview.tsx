@@ -82,7 +82,7 @@ export default function QuizPreviewScreen() {
 
   // Tutor-only guard
   useEffect(() => {
-    if (!user) router.replace("/shalinda/login");
+    if (!user) router.replace("/login");
     else if (user.role !== "tutor")
       router.replace("/shalinda/(authed)/student/studentHome");
   }, [user]);

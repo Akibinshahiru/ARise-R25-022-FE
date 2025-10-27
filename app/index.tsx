@@ -1,89 +1,173 @@
+// app/index.tsx (or app/shalinda/home.tsx)
+import React, { useEffect, useRef } from "react";
+import {
+  SafeAreaView,
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  Easing,
+  TouchableOpacity,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { router } from "expo-router";
+import { UnauthenticatedSidebarLayout } from "@/components/it21801204";
 
-const members = [
-  { name: "Surface Dyslexia", path: "/akila/login", colors: ["#4f46e5", "#6366f1"] },
-  {
-    name: "Phonological Dyslexia",
-    path: "/binoosh/dashboard",
-    colors: ["#ec4899", "#f472b6"],
-  },
-  {
-    name: "Othographic Dyslexia",
-    path: "/shalinda/dashboard",
-    colors: ["#f59e0b", "#fbbf24"],
-  },
-  { name: "Hiruni", path: "/hiruni/dashboard", colors: ["#4f46e5", "#6366f1"] },
-];
+export default function Home() {
+  return (
+    <UnauthenticatedSidebarLayout title="Homepage">
+      <SafeAreaView style={{ flex: 1 }}>
+        <LinearGradient
+          colors={["#0ea5e9", "#6366f1", "#22c55e"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.bg}
+        >
+          <CenterStage />
+        </LinearGradient>
+      </SafeAreaView>
+    </UnauthenticatedSidebarLayout>
+  );
+}
 
-export default function HomePage() {
-  const router = useRouter();
+function CenterStage() {
+  const pulse = useRef(new Animated.Value(0)).current;
+  const float = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 1400,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 1400,
+          easing: Easing.in(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(float, {
+          toValue: 1,
+          duration: 3000,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(float, {
+          toValue: 0,
+          duration: 3000,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, [pulse, float]);
+
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] });
+  const ringOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.6] });
+  const ringScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] });
+  const bob = float.interpolate({ inputRange: [0, 1], outputRange: [0, -8] });
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>ARISE Homepage</Text>
+    <View style={styles.centerWrap}>
+      <Animated.View
+        style={[
+          styles.ring,
+          {
+            opacity: ringOpacity,
+            transform: [{ scale: ringScale }],
+          },
+        ]}
+      />
+      <Animated.View style={{ transform: [{ scale }, { translateY: bob }] }}>
+        <LinearGradient
+          colors={["#ffffff", "#e2e8f0"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.titleWrap}
+        >
+          <Text style={styles.title}>ARise</Text>
+        </LinearGradient>
+      </Animated.View>
 
-      <View style={styles.row}>
-        {members.slice(0, 2).map((member) => (
-          <TouchableOpacity
-            key={member.name}
-            style={{ flex: 0.48 }}
-            onPress={() => router.push({ pathname: member.path } as any)}
-          >
-            <LinearGradient colors={member.colors as any} style={styles.card}>
-              <Text style={styles.cardText}>{member.name}</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <View style={styles.row}>
-        {members.slice(2, 4).map((member) => (
-          <TouchableOpacity
-            key={member.name}
-            style={{ flex: 0.48 }}
-            onPress={() => router.push({ pathname: member.path } as any)}
-          >
-            <LinearGradient colors={member.colors as any} style={styles.card}>
-              <Text style={styles.cardText}>{member.name}</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        ))}
+      <View style={styles.ctaRow}>
+        <TouchableOpacity
+          style={[styles.btn, { backgroundColor: "rgba(255,255,255,0.15)" }]}
+          activeOpacity={0.9}
+          onPress={() => router.push("/login" as any)}
+        >
+          <Text style={styles.btnText}>Login</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.btn, { backgroundColor: "rgba(255,255,255,0.28)" }]}
+          activeOpacity={0.9}
+          onPress={() => router.push("/register" as any)}
+        >
+          <Text style={styles.btnText}>Register</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  bg: {
     flex: 1,
-    backgroundColor: "#f3f4f6",
-    padding: 20,
-    justifyContent: "center",
   },
-  heading: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 20,
-    textAlign: "center",
-    color: "#111827",
-  },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 20,
-  },
-  card: {
-    height: 120,
-    borderRadius: 15,
-    justifyContent: "center",
+  centerWrap: {
+    flex: 1,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 6,
-    elevation: 5,
+    justifyContent: "center",
+    paddingHorizontal: 24,
   },
-  cardText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
+  titleWrap: {
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  title: {
+    fontSize: 72,
+    fontWeight: "900",
+    color: "#0b1020",
+    letterSpacing: 2,
+    textShadowColor: "rgba(0,0,0,0.25)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
+  },
+  ring: {
+    position: "absolute",
+    width: 260,
+    height: 260,
+    borderRadius: 160,
+    borderWidth: 16,
+    borderColor: "rgba(255,255,255,0.35)",
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 6 },
+  },
+  ctaRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 28,
+  },
+  btn: {
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.6)",
+  },
+  btnText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
 });

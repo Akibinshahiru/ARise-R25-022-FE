@@ -19,7 +19,7 @@ export default function HomeButton() {
       "Do you wish to go to homepage?",
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Yes", onPress: () => router.replace("/") },
+        { text: "Yes", onPress: () => router.replace("/home") },
       ],
       { cancelable: true }
     );

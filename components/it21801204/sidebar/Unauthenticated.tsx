@@ -12,21 +12,21 @@ type IoniconName = ComponentProps<typeof Ionicons>["name"];
 
 const items: SidebarItem[] = [
   {
-    key: "dashboard",
+    key: "home",
     label: "Welcome",
-    href: "/shalinda/dashboard",
+    href: "/",
     icon: "home-outline" as IoniconName,
   },
   {
     key: "login",
     label: "Login",
-    href: "/shalinda/login",
+    href: "/login",
     icon: "log-in-outline" as IoniconName,
   },
   {
     key: "register",
     label: "Register",
-    href: "/shalinda/register",
+    href: "/register",
     icon: "person-add-outline" as IoniconName,
   },
 ];
@@ -41,7 +41,7 @@ export function UnauthenticatedSidebarLayout({
         items={items}
         header={
           <Text style={{ fontSize: 18, fontWeight: "700" }}>
-            ARise (IT21801204)
+            Menu
           </Text>
         }
         footer={<Text style={{ color: "#666" }}>Guest</Text>}

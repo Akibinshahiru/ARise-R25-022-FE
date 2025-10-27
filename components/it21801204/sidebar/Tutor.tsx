@@ -62,7 +62,7 @@ export function TutorSidebarLayout({
     // Clear user from redux
     dispatch(setUser(null as any));
     // Redirect to login
-    router.replace("/shalinda/login");
+    router.replace("/login");
   };
 
   return (

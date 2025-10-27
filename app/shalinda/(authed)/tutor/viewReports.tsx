@@ -84,7 +84,7 @@ export default function ViewReportsScreen() {
   // Tutor-only guard
   useEffect(() => {
     if (!user) {
-      router.replace("/shalinda/login");
+      router.replace("/login");
       return;
     }
     if (user.role !== "tutor") {

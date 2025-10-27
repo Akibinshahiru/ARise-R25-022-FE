@@ -76,7 +76,7 @@ export default function RoleAwareSidebarLayout({
     // Clear user from redux
     dispatch(setUser(null as any));
     // Redirect to login
-    router.replace("/shalinda/login");
+    router.replace("/login");
   };
 
   const role = useSelector((s: RootState) => s.auth.user?.role);

@@ -10,7 +10,7 @@ export default function AuthedLayout() {
 
   useEffect(() => {
     if (user === null) {
-      router.replace("/shalinda/login");
+      router.replace("/login");
     }
     setChecked(true);
   }, [user]);

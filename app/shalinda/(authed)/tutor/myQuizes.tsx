@@ -34,7 +34,7 @@ export default function MyQuizzesScreen() {
 
   useEffect(() => {
     if (!user) {
-      router.replace("/shalinda/login");
+      router.replace("/login");
       return;
     }
     if (user.role !== "tutor") {
