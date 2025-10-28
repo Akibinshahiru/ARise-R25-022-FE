@@ -64,17 +64,9 @@ export default function HomePage() {
         colors: ["#f59e0b", "#fbbf24"],
         icon: "sparkles",
       },
-      {
-        name: "Progress Lab",
-        description: isTutor
-          ? "Open Hiruni�s analytics dashboard for cross-cohort trends."
-          : "Check your streaks, achievements, and bonus missions.",
-        path: "/hiruni/dashboard",
-        colors: ["#14b8a6", "#22d3ee"],
-        icon: "analytics",
-      },
+      { name: "Hiruni", path: "/hiruni/splash", colors: ["#4f46e5", "#6366f1"] },
     ],
-    [isTutor]
+    [user?.role]
   );
 
   const displayRole = role ? role.charAt(0).toUpperCase() + role.slice(1) : "Explorer";
