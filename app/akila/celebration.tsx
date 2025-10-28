@@ -1,3 +1,4 @@
+import RoleAwareSidebarLayout from "@/components/it21801204/RoleAwareSidebarLayout";
 import React, { useEffect, useMemo, useRef } from 'react';
 import { SafeAreaView, View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -41,7 +42,8 @@ export default function CelebrationPage() {
   }, [fallVals, confetti]);
 
   return (
-    <SafeAreaView style={styles.root}>
+    <RoleAwareSidebarLayout title="Celebrate Progress">
+      <SafeAreaView style={styles.root}>
       <LinearGradient colors={["#fff7e6", "#f9e6ff"]} style={StyleSheet.absoluteFill} />
       {/* Confetti */}
       {confetti.map((c, i) => (
@@ -63,7 +65,8 @@ export default function CelebrationPage() {
           <Text style={styles.btnText}>Back</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </RoleAwareSidebarLayout>
   );
 }
 

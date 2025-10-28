@@ -1,3 +1,4 @@
+import RoleAwareSidebarLayout from "@/components/it21801204/RoleAwareSidebarLayout";
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { LinearGradient } from "expo-linear-gradient";
@@ -123,7 +124,8 @@ export default function SurfaceDyslexia({ title = "Surface Dyslexia" }: Props) {
   );
 
   return (
-    <SafeAreaView style={styles.root}>
+    <RoleAwareSidebarLayout title={title}>
+      <SafeAreaView style={styles.root}>
       {/* Gradient + animated playful blobs */}
       <LinearGradient colors={["#fff7e6", "#fcefe2", "#f9e6ff"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
       <Animated.View style={[styles.blobOne, { transform: [
@@ -208,7 +210,8 @@ export default function SurfaceDyslexia({ title = "Surface Dyslexia" }: Props) {
           </View>
         </View>
       )}
-    </SafeAreaView>
+      </SafeAreaView>
+    </RoleAwareSidebarLayout>
   );
 }
 

@@ -1,3 +1,4 @@
+import RoleAwareSidebarLayout from "@/components/it21801204/RoleAwareSidebarLayout";
 import React, { useEffect, useMemo, useRef } from 'react';
 import { SafeAreaView, View, Text, StyleSheet, Animated, TouchableOpacity, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -34,7 +35,8 @@ export default function EncouragementPage() {
   ), [W,H]);
 
   return (
-    <SafeAreaView style={styles.root}>
+    <RoleAwareSidebarLayout title="Keep Going">
+      <SafeAreaView style={styles.root}>
       <LinearGradient colors={["#f0fdf4", "#f5f3ff"]} style={StyleSheet.absoluteFill} />
       <View style={styles.center}>
         <Animated.View style={[styles.card, { shadowOpacity: glow.interpolate({ inputRange: [0,1], outputRange: [0.15, 0.35] }) as any }] }>
@@ -51,7 +53,8 @@ export default function EncouragementPage() {
       {stickers.map((s, i) => (
         <Animated.Text key={i} style={[styles.sticker, { left: s.x, top: s.y, transform: [{ translateY: float.interpolate({ inputRange:[0,1], outputRange: [0, i%2===0 ? -8 : 8] }) }] }]}>{s.emoji}</Animated.Text>
       ))}
-    </SafeAreaView>
+      </SafeAreaView>
+    </RoleAwareSidebarLayout>
   );
 }
 

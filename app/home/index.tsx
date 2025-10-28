@@ -1,4 +1,4 @@
-import RoleAwareSidebarLayout from "@/components/it21801204/RoleAwareSidebarLayout";
+ï»¿import RoleAwareSidebarLayout from "@/components/it21801204/RoleAwareSidebarLayout";
 import { RootState } from "@/store";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -67,7 +67,7 @@ export default function HomePage() {
       {
         name: "Progress Lab",
         description: isTutor
-          ? "Open Hiruni’s analytics dashboard for cross-cohort trends."
+          ? "Open Hiruniï¿½s analytics dashboard for cross-cohort trends."
           : "Check your streaks, achievements, and bonus missions.",
         path: "/hiruni/dashboard",
         colors: ["#14b8a6", "#22d3ee"],
@@ -87,7 +87,7 @@ export default function HomePage() {
         colors={["#f5f3ff", "#eef2ff", "#ffffff"]}
         style={styles.gradient}
       >
-        <View pointerEvents="none" style={styles.blobOne} />
+        <View pointerEvents="none" style={[styles.blobOne, { top: -90 }]} />
         <View pointerEvents="none" style={styles.blobTwo} />
         <View pointerEvents="none" style={styles.blobThree} />
 
