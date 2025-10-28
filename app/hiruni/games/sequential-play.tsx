@@ -1,19 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Animated,
-  BackHandler,
-  Alert,
-  ScrollView,
-} from 'react-native';
-import { Play, CircleCheck as CheckCircle, Clock } from 'lucide-react-native';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import * as Speech from 'expo-speech';
 import { GameStartAnimation } from '@/components/IT21838248/GameAnimations';
 import { GAME_WEIGHTS } from '@/config/IT21838248/gameConfig';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import * as Speech from 'expo-speech';
+import { CircleCheck as CheckCircle, Clock, Play } from 'lucide-react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  Alert,
+  Animated,
+  BackHandler,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 const games = [
   {
@@ -112,8 +112,11 @@ export default function SequentialPlayScreen() {
 
   const startCurrentGame = () => {
     if (currentGame) {
+      console.log(currentGame.route);
+      
+      const path = `/hiruni${currentGame.route}`;
       router.push({
-        pathname: currentGame.route as any,
+        pathname: path as any,
         params: {
           sequential: 'true',
           nextGameIndex: (currentGameIndex + 1).toString(),
