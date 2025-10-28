@@ -12,8 +12,8 @@ import {
 } from "react-native";
 import * as THREE from "three";
 // import { DRACOLoader, GLTFLoader } from "three-stdlib";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 type Props = { query?: string };
 
@@ -209,7 +209,7 @@ export default function ARThreeOverlay({ query = "yacht" }: Props) {
       (loader as any).ktx2Loader = undefined;
 
       if (LOCAL_MODELS.yacht && (q.includes("yacht") || q.includes("boat") || q.includes("ship"))) {
-        setDebug("Loading local yacht model…");
+        setDebug("Loading model…");
         const root = await loadLocalGLB(loader, LOCAL_MODELS.yacht);
         postProcess(root);
         group.add(root);
