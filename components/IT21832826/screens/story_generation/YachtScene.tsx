@@ -241,7 +241,7 @@ export default function YachtScene({ query = "yacht", arModelUrl, arTitle = "ARi
       (loader as any).ktx2Loader = undefined;
 
       if (LOCAL_MODELS.yacht && (q.includes("yacht") || q.includes("boat") || q.includes("ship"))) {
-        setDebug("Loading local yacht model…");
+        setDebug("Loading model…");
         const root = await loadLocalGLB(loader, LOCAL_MODELS.yacht);
         postProcess(root);
         group.add(root);

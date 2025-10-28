@@ -128,17 +128,17 @@ export default function SurfaceDyslexia({ title = "Surface Dyslexia" }: Props) {
       <SafeAreaView style={styles.root}>
       {/* Gradient + animated playful blobs */}
       <LinearGradient colors={["#fff7e6", "#fcefe2", "#f9e6ff"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-      <Animated.View style={[styles.blobOne, { transform: [
+      <Animated.View pointerEvents="none" style={[styles.blobOne, { transform: [
         { translateY: floatA.interpolate({ inputRange: [0,1], outputRange: [0, -10] }) },
         { translateX: floatA.interpolate({ inputRange: [0,1], outputRange: [0, 8] }) },
         { scale: floatA.interpolate({ inputRange: [0,1], outputRange: [1, 1.03] }) },
       ] }]} />
-      <Animated.View style={[styles.blobTwo, { transform: [
+      <Animated.View pointerEvents="none" style={[styles.blobTwo, { transform: [
         { translateY: floatB.interpolate({ inputRange: [0,1], outputRange: [0, 12] }) },
         { translateX: floatB.interpolate({ inputRange: [0,1], outputRange: [0, -10] }) },
         { scale: floatB.interpolate({ inputRange: [0,1], outputRange: [1, 1.04] }) },
       ] }]} />
-      <Animated.View style={[styles.blobThree, { transform: [
+      <Animated.View pointerEvents="none" style={[styles.blobThree, { transform: [
         { translateY: floatC.interpolate({ inputRange: [0,1], outputRange: [0, -8] }) },
         { translateX: floatC.interpolate({ inputRange: [0,1], outputRange: [0, 6] }) },
         { scale: floatC.interpolate({ inputRange: [0,1], outputRange: [1, 1.02] }) },
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
 
   // Playful background blobs
   blobOne: {
-    position: "absolute", width: 260, height: 260, borderRadius: 130, backgroundColor: LILAC, left: -60, top: -40, opacity: 0.9,
+    position: "absolute", width: 260, height: 260, borderRadius: 130, backgroundColor: LILAC, left: -60, top: -140, opacity: 0.85,
   },
   blobTwo: {
     position: "absolute", width: 180, height: 180, borderRadius: 90, backgroundColor: YELLOW, right: -40, top: 20, opacity: 0.8,
